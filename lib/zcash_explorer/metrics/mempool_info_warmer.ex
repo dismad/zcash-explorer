@@ -11,7 +11,7 @@ defmodule ZcashExplorer.Metrics.MempoolInfoWarmer do
   Executes this cache warmer.
   """
   def execute(_state) do
-    Zcashex.getmempoolinfo() |> handle_result()
+    :ignore
   end
 
   # ignores the warmer result in case of error

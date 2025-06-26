@@ -27,7 +27,7 @@ config :zcash_explorer, ZcashExplorerWeb.Endpoint,
       "development",
       "--watch-stdin",
       cd: Path.expand("../assets", __DIR__),
-      env: []
+      env: [{"NODE_OPTIONS", "--openssl-legacy-provider"}]
     ],
     npm: [
       "run",

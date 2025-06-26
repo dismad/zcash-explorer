@@ -305,11 +305,11 @@ defmodule ZcashExplorerWeb.TransactionView do
   end
 
   def tx_in_total(tx) when is_map(tx) do
-    tx.vin |> Enum.reduce(0, fn x, acc -> x.value + acc end)
+    tx.vin |> Enum.reduce(0, fn x, acc -> (x.value||0) + acc end)
   end
 
   def tx_out_total(tx) when is_map(tx) do
-    tx.vout |> Enum.reduce(0, fn x, acc -> x.value + acc end)
+    tx.vout |> Enum.reduce(0, fn x, acc -> (x.value||0) + acc end)
   end
 
   def transparent_tx_fee(public_tx) do

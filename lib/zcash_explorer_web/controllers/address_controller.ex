@@ -26,8 +26,17 @@ defmodule ZcashExplorerWeb.AddressController do
     capped_e = if e > blocks, do: blocks, else: e
 
     {:ok, balance} = Zcashex.getaddressbalance(address)
-    {:ok, deltas} = Zcashex.getaddressdeltas(address, s, capped_e, true)
-    txs = Map.get(deltas, "deltas") |> Enum.reverse()
+    #{:ok, deltas} = Zcashex.getaddressdeltas(address, s, capped_e, true)
+    {:ok, txs} = Zcashex.getaddresstxids(address, s,e)
+
+    txs = txs |> Enum.map(fn x ->
+      {:ok, tx} = Zcashex.getrawtransaction(x, 1)
+       value = Map.get(tx, "vout") |>Enum.filter(fn out-> out["scriptPubKey"]["addresses"]|>List.first()==address end )|>   Enum.map(fn vout -> Map.get(vout, "value") end) |> Enum.sum()
+      Map.put(tx,"satoshi", value)
+      tx
+    end)
+    txs = txs |> Enum.reverse()
+
 
     qr =
       address
@@ -63,16 +72,37 @@ defmodule ZcashExplorerWeb.AddressController do
       )
     end
 
-    c = 128
+    c = 5
     {:ok, info} = Cachex.get(:app_cache, "metrics")
     latest_block = info["blocks"]
     e = latest_block
-    s = ((c - 1) * (e / c)) |> floor()
-    s = if s <= 0, do: 1, else: s
-    {:ok, balance} = Zcashex.getaddressbalance(address)
-    {:ok, deltas} = Zcashex.getaddressdeltas(address, s, e, true)
-    txs = Map.get(deltas, "deltas") |> Enum.reverse()
 
+    limit = 20
+    s = e - limit
+    {:ok, balance} = Zcashex.getaddressbalance(address)
+    #{:ok, deltas} = Zcashex.getaddressdeltas(address, s, e, true)
+    #txs = Map.get(deltas, "deltas") |> Enum.reverse()
+    {:ok, txs} = Zcashex.getaddresstxids(address, s,e)
+
+    txs = txs |> Enum.map(fn x ->
+      {:ok, tx} = Zcashex.getrawtransaction(x, 1)
+
+       value = Map.get(tx, "vout")|>Enum.map(fn vout ->
+        case vout do
+          %{"scriptPubKey" => %{"addresses" => [^address]}}  ->
+            Map.get(vout, "valueZat", 0)
+          _ ->
+            0
+        end
+
+      end) |> Enum.sum()
+      tx=Map.put(tx,"satoshis", value)
+      tx
+    end)
+    txs = txs |> Enum.reverse()
+
+    txs|>List.first()|>IO.inspect(label: "first tx")
+    txs = txs |> Enum.reverse()
     qr =
       address
       |> EQRCode.encode()

@@ -4,9 +4,17 @@ defmodule ZcashExplorerWeb.AddressView do
   def title(:get_address, _assigns), do: "Edit Profile"
 
   def zatoshi_to_zec(zatoshi) do
-    zatoshi_per_zec = :math.pow(10, -8)
-    zatoshi_per_zec * zatoshi
+
+    if is_nil(zatoshi) do
+      0.0
+    else
+        zatoshi_per_zec = :math.pow(10, -8)
+
+
+        zatoshi_per_zec * zatoshi
+    end
   end
+
 
   def spend_zatoshi(received, balance) do
     (received - balance) |> zatoshi_to_zec

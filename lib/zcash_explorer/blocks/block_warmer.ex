@@ -12,17 +12,21 @@ defmodule ZcashExplorer.Blocks.BlockWarmer do
   Executes this cache warmer.
   """
   def execute(_state) do
-    high = DateTime.utc_now() |> DateTime.to_unix()
-    low = DateTime.utc_now() |> DateTime.add(-900, :second) |> DateTime.to_unix()
-    # get the blocks mined in that duration
 
-    case Zcashex.getblockhashes(high, low, true, false) do
-      {:ok, blocks} ->
-        # enrich the blocks
-        blocks
-        |> Enum.map(fn x ->
-          {:ok, block} = Zcashex.getblock(x, 2)
-          block_struct = Zcashex.Block.from_map(block)
+    # get the blocks mined in that duration
+    case Zcashex.getblockcount() do
+      {:ok, n} ->
+        #from
+        blocks =
+          Enum.to_list(n - 20..n)
+          |> Enum.map(fn x ->
+            {:ok, block} = Zcashex.getblock(x, 2)
+            block
+          end)
+
+        blocks|> Enum.map(fn x ->
+
+          block_struct = Zcashex.Block.from_map(x)
 
           %{
             "height" => block_struct.height,
