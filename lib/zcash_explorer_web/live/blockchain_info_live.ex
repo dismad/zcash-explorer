@@ -64,7 +64,7 @@ defmodule ZcashExplorerWeb.BlockChainInfoLive do
 
     <div class="px-4 py-5 bg-white shadow rounded-lg overflow-hidden sm:p-6 dark:bg-gray-800">
       <dt class="text-sm font-medium text-gray-500 truncate">
-        zcashd version
+        zebra version
       </dt>
       <dd class="mt-1 text-3xl font-semibold text-gray-900 dark:text-white">
       <%= @blockchain_info["build"] %>
