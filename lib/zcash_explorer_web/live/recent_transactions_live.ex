@@ -1,5 +1,6 @@
 defmodule ZcashExplorerWeb.RecentTransactionsLive do
   use Phoenix.LiveView, layout: false
+  #import ZcashExplorerWeb.TransactionHelper
 
   @impl true
   def mount(_params, session, socket) do
@@ -36,8 +37,7 @@ defmodule ZcashExplorerWeb.RecentTransactionsLive do
 
   @impl true
   def render(assigns) do
-    # Show only 12 transactions when embedded on the homepage
-    txs_to_show = if assigns.standalone, do: assigns.transaction_cache, else: Enum.take(assigns.transaction_cache, 12)
+    txs_to_show = if assigns.standalone, do: assigns.transaction_cache, else: Enum.take(assigns.transaction_cache || [], 12)
 
     ~H"""
     <!DOCTYPE html>
@@ -51,7 +51,6 @@ defmodule ZcashExplorerWeb.RecentTransactionsLive do
       </head>
       <body class="bg-gray-50 dark:bg-gray-900">
 
-        <!-- Header only when visiting the full page directly -->
         <%= if @standalone do %>
           <header>
             <nav x-data="{ open: false }" class="shrink-0 bg-indigo-600 dark:bg-gray-800">
@@ -114,7 +113,7 @@ defmodule ZcashExplorerWeb.RecentTransactionsLive do
           </header>
         <% end %>
 
-        <!-- Page content -->
+        <!-- Table -->
         <div class="w-full">
           <div class="shadow overflow-hidden border-gray-200 rounded-lg overflow-x-auto">
             <table class="w-full text-sm text-left text-gray-500 dark:text-gray-400">
@@ -138,23 +137,27 @@ defmodule ZcashExplorerWeb.RecentTransactionsLive do
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap"><%= tx["time"] %></td>
                     <td class="px-6 py-4 whitespace-nowrap"><%= tx["tx_out_total"] %></td>
-                    <td class="px-6 py-4 whitespace-nowrap">
-                      <%= case tx["type"] do %>
-                        <% "coinbase" -> %> <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-400 text-gray-900 capitalize">💰 Coinbase</span>
-                        <% "shielded" -> %> <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-200 text-gray-900 capitalize">🛡 Shielded</span>
-                        <% "transparent" -> %> <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-200 text-gray-900 capitalize">🔍 Public</span>
-                        <% "shielding" -> %> <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-50 text-gray-900 capitalize">Shielding (T-Z)</span>
-                        <% "deshielding" -> %> <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-50 text-gray-900 capitalize">Deshielding (Z-T)</span>
-                        <% "mixed" -> %> <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-200 text-gray-900 capitalize">Mixed</span>
-                        <% _ -> %> <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-200 text-gray-900">Unknown</span>
-                      <% end %>
-                    </td>
+                    <td class="px-4 py-4 whitespace-nowrap">
+		  <%= case tx["type"] do %>
+		    <% "coinbase" -> %> <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-400 text-gray-900 capitalize">💰 Coinbase</span>
+		    <% "shielded" -> %> <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-200 text-gray-900 capitalize">🛡 Shielded</span>
+		    <% "sapling" -> %> <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-200 text-gray-900 capitalize">🛡️ Sapling</span>
+		    <% "sprout" -> %> <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-200 text-gray-900 capitalize">🌱 Sprout</span>
+		    <% "transparent" -> %> <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-200 text-gray-900 capitalize">🔍 Public</span>
+		    <% "shielding" -> %> <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-50 text-gray-900 capitalize">Shielding (T-Z)</span>
+		    <% "deshielding" -> %> <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-50 text-gray-900 capitalize">Deshielding (Z-T)</span>
+		    <% "mixed" -> %> <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-200 text-gray-900 capitalize">Mixed</span>
+		    <% "orchard" -> %> <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-200 text-gray-900 capitalize">🌳 Orchard</span>
+		    <% _ -> %> <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-200 text-gray-900">Unknown</span>
+		  <% end %>
+		</td>
                   </tr>
                 <% end %>
               </tbody>
             </table>
           </div>
         </div>
+
       </body>
     </html>
     """

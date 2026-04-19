@@ -1,25 +1,39 @@
 defmodule ZcashExplorer.Mempool.MempoolWarmer do
   use Cachex.Warmer
+  require Logger
+  import ZcashExplorerWeb.TransactionHelper
 
-  @doc """
-  Returns the interval for this warmer.
-  """
-  def interval,
-    do: :timer.seconds(5)
+  def interval, do: :timer.seconds(5)
 
-  @doc """
-  Executes this cache warmer.
-  """
   def execute(_state) do
-    Zcashex.getrawmempool(true) |> handle_result()
-  end
+    case Zcashex.getrawmempool(true) do
+      {:ok, raw_mempool} ->
+        mempool_info =
+          Enum.map(raw_mempool, fn {txid, info} ->
+            type =
+              case Zcashex.getrawtransaction(txid, 1) do
+                {:ok, full_tx} ->
+                  tx = Zcashex.Transaction.from_map(full_tx)
+                  tx_type(tx)
 
-  # ignores the warmer result in case of error
-  defp handle_result({:error, _reason}),
-    do: :ignore
+                {:error, reason} ->
+                  Logger.error("MempoolWarmer: Failed to fetch full tx #{txid}: #{inspect(reason)}")
+                  "unknown"
+              end
 
-  defp handle_result({:ok, raw_mempool}) do
-    mempool_info = Enum.map(raw_mempool, fn {k, v} -> %{"txid" => k, "info" => v} end)
-    {:ok, [{"raw_mempool", mempool_info}]}
+            %{
+              "txid" => txid,
+              "info" => info,
+              "type" => type
+            }
+          end)
+
+        Logger.info("✅ MempoolWarmer: Saved #{length(mempool_info)} transactions with correct types")
+        {:ok, [{"raw_mempool", mempool_info}]}
+
+      {:error, reason} ->
+        Logger.error("MempoolWarmer failed: #{inspect(reason)}")
+        :ignore
+    end
   end
 end

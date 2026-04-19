@@ -125,7 +125,7 @@ defmodule ZcashExplorerWeb.HomeLive do
               </dt>
               <dd class="ml-16 pb-6 flex items-baseline sm:pb-7">
                 <div class="text-3xl font-semibold whitespace-nowrap">
-                  <%= live_render(@socket, ZcashExplorerWeb.MempoolInfoLive, id: "mempool-info") %>
+                  <%= live_render(@socket, ZcashExplorerWeb.MempoolInfoLive, id: "mempool-info", session: %{"standalone" => false}) %>
                 </div>
               </dd>
               <div class="absolute bottom-0 inset-x-0 bg-gray-50 px-4 py-4 sm:px-6 dark:bg-gray-700">

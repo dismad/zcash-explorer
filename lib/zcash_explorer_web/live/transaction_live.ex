@@ -1,44 +1,18 @@
 defmodule ZcashExplorerWeb.TransactionLive do
   use Phoenix.LiveView, layout: false
+  import ZcashExplorerWeb.TransactionHelper
 
   @impl true
-  def mount(%{"txid" => txid}, _session, socket) do
+  def mount(%{"txid" => txid}, session, socket) do
     network = Application.get_env(:zcash_explorer, Zcashex, [])[:zcash_network] || "mainnet"
+    standalone = Map.get(session, "standalone", true)
 
     case Zcashex.getrawtransaction(txid, 1) do
-      {:ok, tx} ->
-        tx_data = Zcashex.Transaction.from_map(tx)
-        {:ok, assign(socket, tx: tx_data, txid: txid, zcash_network: network)}
-
-      {:error, reason} ->
-        {:ok, assign(socket, error: reason, txid: txid, zcash_network: network)}
-    end
-  end
-
-  # ── Local helpers (replacing old View modules) ──
-  defp mined_time(timestamp) when is_integer(timestamp) do
-    Timex.from_unix(timestamp) |> Timex.format!("{relative}", :relative)
-  rescue
-    _ -> "—"
-  end
-
-  defp format_zec(amount) when is_number(amount) do
-    amount
-    |> Decimal.new()
-    |> Decimal.div(100_000_000)
-    |> Decimal.to_string(:normal, 8)
-  rescue
-    _ -> "0.00000000"
-  end
-
-  # Simple tx type detection (expand if needed)
-  defp tx_type(tx) do
-    cond do
-      length(tx.vin) > 0 && hd(tx.vin).coinbase != nil -> "coinbase"
-      length(tx.vShieldedSpend) > 0 && length(tx.vShieldedOutput) > 0 -> "shielded"
-      length(tx.vShieldedSpend) > 0 -> "deshielding"
-      length(tx.vShieldedOutput) > 0 -> "shielding"
-      true -> "transparent"
+      {:ok, tx_map} ->
+        tx = Zcashex.Transaction.from_map(tx_map)
+        {:ok, assign(socket, tx: tx, txid: txid, zcash_network: network, standalone: standalone)}
+      _ ->
+        {:ok, assign(socket, tx: nil, txid: txid, zcash_network: network, standalone: standalone)}
     end
   end
 
@@ -56,119 +30,160 @@ defmodule ZcashExplorerWeb.TransactionLive do
       </head>
       <body class="bg-gray-50 dark:bg-gray-900">
 
-        <!-- Full header -->
-        <header>
-          <nav x-data="{ open: false }" class="shrink-0 bg-indigo-600 dark:bg-gray-800">
-            <div class="max-w-7xl mx-auto px-2 sm:px-4 lg:px-8">
-              <div class="relative flex items-center justify-between h-16">
-                <!-- Logo -->
-                <div class="flex items-center px-2 lg:px-0 xl:w-64">
-                  <a href="/">
-                    <div class="shrink-0">
-                      <img class="h-8 w-auto" src="/images/zcash-icon-white.svg" alt="Zcash Block Explorer">
-                    </div>
-                  </a>
-                  <a href="/">
-                    <%= if @zcash_network == "testnet" do %>
-                      <div class="shrink-0 px-1 text-white dark:text-white md:block lg:block xl:block 2xl:block hidden">Zcash Testnet Block Explorer</div>
-                    <% else %>
-                      <div class="shrink-0 px-1 text-white dark:text-white md:block lg:block xl:block 2xl:block hidden">Zcash Block Explorer</div>
-                    <% end %>
-                  </a>
-                </div>
-
-                <!-- Search -->
-                <div class="flex-1 flex justify-center lg:justify-end">
-                  <div class="w-full px-2 lg:px-6">
-                    <form action="/search">
-                      <div class="relative text-gray-200 dark:text-slate-200 focus-within:text-gray-400 dark:focus-within:text-slate-800">
-                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                          <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                            <path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd" />
-                          </svg>
-                        </div>
-                        <input name="qs" class="block w-full pl-10 pr-3 py-2 border border-transparent rounded-md leading-5 text-indigo-100 placeholder-indigo-200 focus:outline-none focus:bg-white focus:ring-0 focus:placeholder-gray-400 focus:text-gray-900 sm:text-sm dark:focus:placeholder-white dark:border-slate-600 dark:placeholder-slate-400 dark:text-white dark:focus:ring-slate-500 dark:focus:border-slate-500 dark:hover:bg-slate-700 dark:focus:ring-slate-800 bg-white/25 dark:bg-slate-700 dark:focus:bg-slate-600 dark:placeholder-slate-200 dark:focus:text-gray-200" placeholder="transaction / block / address" type="search">
+        <%= if @standalone do %>
+          <header>
+            <nav x-data="{ open: false }" class="shrink-0 bg-indigo-600 dark:bg-gray-800">
+              <div class="max-w-7xl mx-auto px-2 sm:px-4 lg:px-8">
+                <div class="relative flex items-center justify-between h-16">
+                  <div class="flex items-center px-2 lg:px-0 xl:w-64">
+                    <a href="/">
+                      <div class="shrink-0">
+                        <img class="h-8 w-auto" src="/images/zcash-icon-white.svg" alt="Zcash Block Explorer">
                       </div>
-                    </form>
+                    </a>
+                    <a href="/">
+                      <%= if @zcash_network == "testnet" do %>
+                        <div class="shrink-0 px-1 text-white dark:text-white md:block lg:block xl:block 2xl:block hidden">Zcash Testnet Block Explorer</div>
+                      <% else %>
+                        <div class="shrink-0 px-1 text-white dark:text-white md:block lg:block xl:block 2xl:block hidden">Zcash Block Explorer</div>
+                      <% end %>
+                    </a>
                   </div>
-                </div>
 
-                <!-- Desktop nav -->
-                <div class="hidden lg:block lg:w-80 z-40">
-                  <div class="flex items-center justify-end">
-                    <a href="/mempool" class="px-3 py-2 rounded-md text-sm font-medium text-indigo-200 hover:text-white dark:text-gray-400">Mempool</a>
-                    <a href="/blocks" class="px-3 py-2 rounded-md text-sm font-medium text-indigo-200 hover:text-white dark:text-gray-400">Blocks</a>
-                    <a href="/nodes" class="px-3 py-2 rounded-md text-sm font-medium text-indigo-200 hover:text-white dark:text-gray-400">Nodes</a>
-                    <a href="/broadcast" class="px-3 py-2 rounded-md text-sm font-medium text-indigo-200 hover:text-white dark:text-gray-400">Broadcast</a>
-                    <a href="/vk" class="px-3 py-2 rounded-md text-sm font-medium text-indigo-200 hover:text-white dark:text-gray-400">Viewing Key</a>
+                  <div class="flex-1 flex justify-center lg:justify-end">
+                    <div class="w-full px-2 lg:px-6">
+                      <form action="/search">
+                        <div class="relative text-gray-200 dark:text-slate-200 focus-within:text-gray-400 dark:focus-within:text-slate-800">
+                          <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                              <path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd" />
+                            </svg>
+                          </div>
+                          <input name="qs" class="block w-full pl-10 pr-3 py-2 border border-transparent rounded-md leading-5 text-indigo-100 placeholder-indigo-200 focus:outline-none focus:bg-white focus:ring-0 focus:placeholder-gray-400 focus:text-gray-900 sm:text-sm dark:focus:placeholder-white dark:border-slate-600 dark:placeholder-slate-400 dark:text-white dark:focus:ring-slate-500 dark:focus:border-slate-500 dark:hover:bg-slate-700 dark:focus:ring-slate-800 bg-white/25 dark:bg-slate-700 dark:focus:bg-slate-600 dark:placeholder-slate-200 dark:focus:text-gray-200" placeholder="transaction / block / address" type="search">
+                        </div>
+                      </form>
+                    </div>
+                  </div>
+
+                  <div class="hidden lg:block lg:w-80 z-40">
+                    <div class="flex items-center justify-end">
+                      <a href="/mempool" class="px-3 py-2 rounded-md text-sm font-medium text-indigo-200 hover:text-white dark:text-gray-400">Mempool</a>
+                      <a href="/blocks" class="px-3 py-2 rounded-md text-sm font-medium text-indigo-200 hover:text-white dark:text-gray-400">Blocks</a>
+                      <a href="/nodes" class="px-3 py-2 rounded-md text-sm font-medium text-indigo-200 hover:text-white dark:text-gray-400">Nodes</a>
+                      <a href="/broadcast" class="px-3 py-2 rounded-md text-sm font-medium text-indigo-200 hover:text-white dark:text-gray-400">Broadcast</a>
+                      <a href="/vk" class="px-3 py-2 rounded-md text-sm font-medium text-indigo-200 hover:text-white dark:text-gray-400">Viewing Key</a>
+                    </div>
                   </div>
                 </div>
               </div>
+            </nav>
+          </header>
+        <% end %>
+
+        <div class="mx-auto px-4 py-8">
+          <h1 class="text-2xl font-semibold mb-6">Details for the Zcash Transaction ID <%= @txid %></h1>
+
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
+              <dl class="space-y-4">
+                <div class="flex justify-between"><dt class="text-gray-500">Confirmations</dt><dd class="font-semibold"><%= @tx && @tx.confirmations || 0 %></dd></div>
+                <div class="flex justify-between"><dt class="text-gray-500">Block Id</dt><dd class="font-medium"><%= @tx && @tx.height %></dd></div>
+                <div class="flex justify-between"><dt class="text-gray-500">JoinSplits ?</dt><dd><%= if length(@tx && @tx.vjoinsplit || []) > 0, do: "Yes", else: "No" %></dd></div>
+                <div class="flex justify-between"><dt class="text-gray-500">Size (bytes)</dt><dd><%= @tx && @tx.size %></dd></div>
+                <div class="flex justify-between"><dt class="text-gray-500">Transaction fee</dt><dd><%= format_zec(@tx && @tx.valueBalance || 0) %> ZEC</dd></div>
+              </dl>
             </div>
 
-            <!-- Mobile menu -->
-            <div x-show="open" class="lg:hidden bg-indigo-700 dark:bg-gray-900 px-2 pt-2 pb-3">
-              <a href="/mempool" class="block px-3 py-2 text-white hover:bg-indigo-600 rounded-md">Mempool</a>
-              <a href="/blocks" class="block px-3 py-2 text-white hover:bg-indigo-600 rounded-md">Blocks</a>
-              <a href="/nodes" class="block px-3 py-2 text-white hover:bg-indigo-600 rounded-md">Nodes</a>
-              <a href="/broadcast" class="block px-3 py-2 text-white hover:bg-indigo-600 rounded-md">Broadcast Transaction</a>
-              <a href="/vk" class="block px-3 py-2 text-white hover:bg-indigo-600 rounded-md">Viewing Key</a>
+            <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
+              <dl class="space-y-4">
+                <div class="flex justify-between"><dt class="text-gray-500">Public Inputs / Outputs</dt><dd><%= length(@tx && @tx.vin || []) %> / <%= length(@tx && @tx.vout || []) %></dd></div>
+                <div class="flex justify-between"><dt class="text-gray-500">Transferred from shielded pool</dt><dd>0.0 ZEC</dd></div>
+                <div class="flex justify-between"><dt class="text-gray-500">Version</dt><dd><%= @tx && @tx.version %></dd></div>
+              </dl>
             </div>
-          </nav>
-        </header>
 
-        <!-- Transaction Details Content (ported from your old tx.html.heex) -->
-        <main class="py-4 lg:px-12">
-          <div class="grid gap-4 mx-2 grid-cols-1 md:mx-8">
-            <div class="space-y-6 lg:col-start-1 lg:col-span-2">
-              <section aria-labelledby="block-details-title">
-                <div class="bg-white shadow rounded-lg dark:bg-gray-800">
-                  <div class="px-4 py-5 sm:px-6">
-                    <h2 id="block-details-title" class="text-lg leading-6 font-medium text-gray-900 inline-block break-words dark:text-gray-50">
-                      Details for the Zcash Transaction ID
-                    </h2>
-                    <h2 class="md:inline-block text-gun-powder-500 break-words dark:text-gray-200"><%= @tx.txid %></h2>
-                  </div>
-
-                  <div class="border-t border-gray-200 px-4 py-5 sm:px-6">
-                    <dl class="grid grid-cols-1 gap-x-4 gap-y-8 sm:grid-cols-3">
-                      <div class="sm:col-span-1">
-                        <dt class="text-sm font-medium text-gray-500">Confirmations</dt>
-                        <dd class="mt-1 text-xl font-semibold text-gray-900 dark:text-gray-50"><%= if @tx.confirmations == nil, do: 0, else: @tx.confirmations %></dd>
-                      </div>
-                      <div class="sm:col-span-1">
-                        <dt class="text-sm font-medium text-gray-500">Time (UTC)</dt>
-                        <dd class="mt-1 text-sm text-gray-900 dark:text-gray-50"><%= mined_time(@tx.time) %></dd>
-                      </div>
-                      <div class="sm:col-span-1">
-                        <dt class="text-sm font-medium text-gray-500">Tx Type</dt>
-                        <dd class="mt-1 text-sm text-gray-900">
-                          <%= case tx_type(@tx) do %>
-                            <% "coinbase" -> %>
-                              <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-s font-medium bg-yellow-400 text-gray-900 capitalize">💰 Coinbase</span>
-                            <% "shielded" -> %>
-                              <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-s font-medium bg-green-200 text-gray-900 capitalize">🛡 Shielded</span>
-                            <% "transparent" -> %>
-                              <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-s font-medium bg-red-200 text-gray-900 capitalize">🔍 Public</span>
-                            <% "shielding" -> %>
-                              <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-s font-medium bg-red-50 text-gray-900 capitalize">Shielding (T-Z)</span>
-                            <% "deshielding" -> %>
-                              <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-s font-medium bg-red-50 text-gray-900 capitalize">Deshielding (Z-T)</span>
-                            <% _ -> %>
-                              <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-s font-medium bg-gray-200 text-gray-900 capitalize">Unknown</span>
-                          <% end %>
-                        </dd>
-                      </div>
-                      <!-- Add more fields from your old template here as needed -->
-                    </dl>
-                  </div>
-                </div>
-              </section>
+            <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
+              <dl class="space-y-4">
+                <div class="flex justify-between"><dt class="text-gray-500">Shielded Inputs / Outputs</dt><dd><%= length(@tx && @tx.vShieldedSpend || []) %> / <%= length(@tx && @tx.vShieldedOutput || []) %></dd></div>
+                <div class="flex justify-between"><dt class="text-gray-500">Orchard Action transfers</dt><dd><%= length(@tx && @tx.orchard && @tx.orchard.actions || []) %></dd></div>
+              </dl>
             </div>
           </div>
-        </main>
+
+          <!-- Tx Type -->
+          <div class="mt-6 flex items-center gap-x-3">
+            <span class="text-gray-500">Tx Type</span>
+            <%= case tx_type(@tx) do %>
+              <% "coinbase" -> %> <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-yellow-400 text-gray-900 capitalize">💰 Coinbase</span>
+              <% "shielded" -> %> <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-200 text-gray-900 capitalize">🛡 Shielded</span>
+              <% "sapling" -> %> <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-emerald-200 text-gray-900 capitalize">🛡️ Sapling</span>
+              <% "sprout" -> %> <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-amber-200 text-gray-900 capitalize">🌱 Sprout</span>
+              <% "transparent" -> %> <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-red-200 text-gray-900 capitalize">🔍 Public</span>
+              <% "shielding" -> %> <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-red-50 text-gray-900 capitalize">Shielding ( T-Z )</span>
+              <% "deshielding" -> %> <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-red-50 text-gray-900 capitalize">Deshielding ( Z-T )</span>
+              <% "mixed" -> %> <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-gray-200 text-gray-900 capitalize">Mixed</span>
+              <% "orchard" -> %> <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-purple-200 text-gray-900 capitalize">🌳 Orchard</span>
+              <% _ -> %> <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-gray-200 text-gray-900">Unknown</span>
+            <% end %>
+          </div>
+
+          <!-- Public Transfers -->
+          <div class="mt-8">
+            <h2 class="text-lg font-semibold mb-4">Public Transfers</h2>
+            <div class="flex items-center gap-8 bg-white dark:bg-gray-800 shadow rounded-lg p-6">
+              <div class="flex-1">
+                <div class="text-sm text-gray-500 mb-2">Inputs (<%= length(@tx && @tx.vin || []) %>)</div>
+                <%= if length(@tx && @tx.vShieldedSpend || []) > 0 do %>
+                  <div class="inline-flex items-center gap-2 px-4 py-2 bg-emerald-100 text-emerald-700 rounded-full text-sm font-medium">
+                    <span class="text-lg">🛡️</span> Shielded
+                  </div>
+                <% else %>
+                  <div class="text-gray-400">No public inputs</div>
+                <% end %>
+              </div>
+
+              <div class="text-4xl text-gray-300">→</div>
+
+              <div class="flex-1">
+                <div class="text-sm text-gray-500 mb-2">Outputs (<%= length(@tx && @tx.vout || []) %>)</div>
+                <%= for vout <- @tx && @tx.vout || [] do %>
+                  <div class="flex justify-between items-center py-2 border-b last:border-none">
+                    <%= if addr = first_address(vout) do %>
+                      <a href={address_link(addr)} class="font-mono text-sm text-indigo-600 hover:underline">
+                        <%= addr %>
+                      </a>
+                    <% else %>
+                      <span class="font-mono text-sm text-gray-400">No address</span>
+                    <% end %>
+                    <span class="font-medium"><%= format_zec(vout.value) %> ZEC</span>
+                  </div>
+                <% end %>
+              </div>
+            </div>
+          </div>
+        </div>
+
       </body>
     </html>
     """
   end
+
+  defp first_address(vout) do
+    case vout && vout.scriptPubKey && vout.scriptPubKey.addresses do
+      addresses when is_list(addresses) and length(addresses) > 0 -> hd(addresses)
+      _ -> nil
+    end
+  end
+
+  defp address_link(nil), do: "#"
+  defp address_link(addr), do: "/addresses/#{addr}"
+
+  defp format_zec(amount) when is_number(amount) do
+    amount
+    |> Decimal.from_float()
+    |> Decimal.div(Decimal.new(100_000_000))
+    |> Decimal.round(8)
+    |> Decimal.to_string()
+  end
+  defp format_zec(_), do: "0.0"
 end
