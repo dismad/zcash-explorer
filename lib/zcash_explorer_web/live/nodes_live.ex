@@ -8,27 +8,25 @@ defmodule ZcashExplorerWeb.NodesLive do
 
     if connected?(socket), do: Process.send_after(self(), :update, 5000)
 
-    case Cachex.get(:app_cache, "zcash_nodes") do
-      {:ok, zcash_nodes} ->
-        {:ok, assign(socket,
-          zcash_nodes: zcash_nodes,
-          zcash_network: network,
-          standalone: standalone
-        )}
-      _ ->
-        {:ok, assign(socket,
-          zcash_nodes: [],
-          zcash_network: network,
-          standalone: standalone
-        )}
-    end
+    # Get peer list
+    {:ok, nodes} = Cachex.get(:app_cache, "zcash_nodes")
+
+    # Get local node info for the top summary
+    {:ok, node_info} = Cachex.get(:app_cache, "info")
+
+    {:ok, assign(socket,
+      zcash_nodes: nodes || [],
+      node_info: node_info || %{},
+      zcash_network: network,
+      standalone: standalone
+    )}
   end
 
   @impl true
   def handle_info(:update, socket) do
     Process.send_after(self(), :update, 5000)
-    {:ok, zcash_nodes} = Cachex.get(:app_cache, "zcash_nodes")
-    {:noreply, assign(socket, :zcash_nodes, zcash_nodes)}
+    {:ok, nodes} = Cachex.get(:app_cache, "zcash_nodes")
+    {:noreply, assign(socket, :zcash_nodes, nodes || [])}
   end
 
   @impl true
@@ -44,8 +42,6 @@ defmodule ZcashExplorerWeb.NodesLive do
         <link rel="stylesheet" href="/css/app.css">
       </head>
       <body class="bg-gray-50 dark:bg-gray-900">
-
-        <!-- Header only on standalone page -->
         <%= if @standalone do %>
           <header class="bg-indigo-600 text-white h-14 flex items-center">
 	  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
@@ -91,31 +87,52 @@ defmodule ZcashExplorerWeb.NodesLive do
 	</header>
         <% end %>
 
-        <!-- ===== TABLE CONTENT ===== -->
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <h1 class="text-3xl font-semibold text-gray-900 dark:text-white mb-8">Network Nodes</h1>
+        <!-- Node Info Summary -->
+        <div class="max-w-7xl mx-auto px-4 py-6">
+          <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
+            <h2 class="text-lg font-semibold mb-4">Local Node Info</h2>
+            <dl class="grid grid-cols-2 md:grid-cols-4 gap-6 text-sm">
+              <div><dt class="text-gray-500">Version</dt><dd class="font-medium"><%= @node_info["build"] || "—" %></dd></div>
+              <div><dt class="text-gray-500">Chain</dt><dd class="font-medium"><%= @node_info["chain"] || "—" %></dd></div>
+              <div><dt class="text-gray-500">Blocks</dt><dd class="font-medium"><%= @node_info["blocks"] || "—" %></dd></div>
+              <div><dt class="text-gray-500">Connections</dt><dd class="font-medium"><%= length(@zcash_nodes) %></dd></div>
+            </dl>
+          </div>
+        </div>
 
+        <!-- Peers Table -->
+        <div class="w-full px-4">
           <div class="shadow overflow-hidden border-gray-200 rounded-lg overflow-x-auto">
             <table class="w-full text-sm text-left text-gray-500 dark:text-gray-400">
               <thead class="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">
                 <tr>
                   <th scope="col" class="px-6 py-3">Address</th>
                   <th scope="col" class="px-4 py-3">Version</th>
-                  <th scope="col" class="px-4 py-3">Block Height</th>
+                  <th scope="col" class="px-4 py-3">Services</th>
+                  <th scope="col" class="px-4 py-3">Direction</th>
+                  <th scope="col" class="px-4 py-3">Ping (ms)</th>
+                  <th scope="col" class="px-4 py-3">Connected</th>
+                  <th scope="col" class="px-4 py-3">Synced Blocks</th>
+                  <th scope="col" class="px-4 py-3">Starting Height</th>
                 </tr>
               </thead>
-              <tbody class="bg-white-500 divide-y divide-gray-200">
+              <tbody class="bg-white divide-y divide-gray-200 dark:bg-gray-800 dark:divide-gray-700">
                 <%= for node <- @zcash_nodes do %>
-                  <tr class="bg-white border-b dark:bg-gray-800 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600">
-                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-indigo-600 hover:text-indigo-500 animate-pulse dark:text-white dark:hover:text-white">
-                      <%= node["addr"] %>
+                  <tr class="hover:bg-gray-50 dark:hover:bg-gray-600">
+                    <td class="px-6 py-4 whitespace-nowrap font-mono text-sm"><%= node["addr"] %></td>
+                    <td class="px-4 py-4 whitespace-nowrap text-sm"><%= node["subver"] || "—" %></td>
+                    <td class="px-4 py-4 whitespace-nowrap text-sm font-mono"><%= node["services"] || "—" %></td>
+                    <td class="px-4 py-4 whitespace-nowrap">
+                      <%= if node["inbound"] do %>
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">Inbound</span>
+                      <% else %>
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">Outbound</span>
+                      <% end %>
                     </td>
-                    <td class="px-4 py-4 whitespace-nowrap text-sm font-medium">
-                      <%= node["subver"] %>
-                    </td>
-                    <td class="px-4 py-4 whitespace-nowrap text-sm font-medium">
-                      <%= node["synced_blocks"] %>
-                    </td>
+                    <td class="px-4 py-4 whitespace-nowrap text-sm"><%= node["pingtime"] || "—" %> ms</td>
+                    <td class="px-4 py-4 whitespace-nowrap text-sm"><%= relative_time(node["conntime"]) %></td>
+                    <td class="px-4 py-4 whitespace-nowrap text-sm"><%= node["synced_blocks"] || "—" %></td>
+                    <td class="px-4 py-4 whitespace-nowrap text-sm"><%= node["startingheight"] || "—" %></td>
                   </tr>
                 <% end %>
               </tbody>
@@ -126,4 +143,10 @@ defmodule ZcashExplorerWeb.NodesLive do
     </html>
     """
   end
+
+  defp relative_time(nil), do: "—"
+  defp relative_time(timestamp) when is_integer(timestamp) do
+    Timex.from_unix(timestamp) |> Timex.format!("{relative}", :relative)
+  end
+  defp relative_time(_), do: "—"
 end
