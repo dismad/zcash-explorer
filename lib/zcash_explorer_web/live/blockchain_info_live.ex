@@ -57,77 +57,48 @@ defmodule ZcashExplorerWeb.BlockChainInfoLive do
       <body class="bg-gray-50 dark:bg-gray-900">
 
         <!-- ===== EXACT SAME HEADER AS HOMELIVE ===== -->
-        <header>
-          <nav x-data="{ open: false }" class="shrink-0 bg-indigo-600 dark:bg-gray-800">
-            <div class="max-w-7xl mx-auto px-2 sm:px-4 lg:px-8">
-              <div class="relative flex items-center justify-between h-16">
-                <!-- Logo -->
-                <div class="flex items-center px-2 lg:px-0 xl:w-64">
-                  <a href="/">
-                    <div class="shrink-0">
-                      <img class="h-8 w-auto" src="/images/zcash-icon-white.svg" alt="Zcash Block Explorer">
-                    </div>
-                  </a>
-                  <a href="/">
-                    <%= if @zcash_network == "testnet" do %>
-                      <div class="shrink-0 px-1 text-white dark:text-white md:block lg:block xl:block 2xl:block hidden">
-                        Zcash Testnet Block Explorer
-                      </div>
-                    <% else %>
-                      <div class="shrink-0 px-1 text-white dark:text-white md:block lg:block xl:block 2xl:block hidden">
-                        Zcash Block Explorer
-                      </div>
-                    <% end %>
-                  </a>
-                </div>
+        <header class="bg-indigo-600 text-white h-14 flex items-center">
+	  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
+	    <div class="flex items-center justify-between h-full">
+	      
+	      <!-- Logo + Title -->
+	      <div class="flex items-center gap-x-3 flex-shrink-0">
+		<a href="/" class="flex items-center">
+		  <img src="/images/zcash-icon-white.svg" class="h-8 w-8" alt="Zcash">
+		</a>
+		<a href="/" class="text-xl font-semibold tracking-tight">Zcash Block Explorer</a>
+	      </div>
 
-                <!-- Search bar -->
-                <div class="flex-1 flex justify-center lg:justify-end">
-                  <div class="w-full px-2 lg:px-6 max-w-md">
-                    <form action="/search" method="get">
-                      <div class="relative text-gray-200 dark:text-slate-200 focus-within:text-gray-400">
-                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 01-14 0 7 7 0 0114 0z" />
-                          </svg>
-                        </div>
-                        <input type="text" name="q" placeholder="transaction / block / address" 
-                               class="block w-full pl-10 pr-3 py-2 border border-transparent rounded-md leading-5 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:bg-white dark:focus:bg-gray-600 focus:ring-0">
-                      </div>
-                    </form>
-                  </div>
-                </div>
+	      <!-- Search Bar -->
+	      <div class="flex-1 max-w-2xl mx-8 mt-4">
+		<form action="/search" class="relative">
+		  <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+		    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-white/70" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+		      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 01-14 0 7 7 0 0114 0z" />
+		    </svg>
+		  </div>
+		  <input 
+		    name="qs" 
+		    type="search"
+		    class="block w-full pl-11 pr-4 py-2.5 bg-white/20 hover:bg-white/30 focus:bg-white focus:text-gray-900 placeholder:text-white/70 text-white rounded-3xl text-base focus:outline-none focus:ring-2 focus:ring-white/50 transition-all"
+		    placeholder="transaction / block / address"
+		  >
+		</form>
+	      </div>
 
-                <!-- Desktop nav -->
-                <div class="hidden lg:flex items-center space-x-8 text-white text-sm font-medium">
-                  <a href="/mempool" class="hover:text-indigo-200">Mempool</a>
-                  <a href="/blocks" class="hover:text-indigo-200">Blocks</a>
-                  <a href="/nodes" class="hover:text-indigo-200">Nodes</a>
-                  <a href="/broadcast" class="hover:text-indigo-200">Broadcast</a>
-                  <a href="/vk" class="hover:text-indigo-200">Viewing Key</a>
-                </div>
-
-                <!-- Mobile menu button -->
-                <div class="lg:hidden">
-                  <button @click="open = !open" class="text-white p-2">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
-                    </svg>
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <!-- Mobile menu -->
-            <div x-show="open" class="lg:hidden bg-indigo-700 dark:bg-gray-900 px-2 pt-2 pb-3">
-              <a href="/mempool" class="block px-3 py-2 text-white hover:bg-indigo-600 rounded-md">Mempool</a>
-              <a href="/blocks" class="block px-3 py-2 text-white hover:bg-indigo-600 rounded-md">Blocks</a>
-              <a href="/nodes" class="block px-3 py-2 text-white hover:bg-indigo-600 rounded-md">Nodes</a>
-              <a href="/broadcast" class="block px-3 py-2 text-white hover:bg-indigo-600 rounded-md">Broadcast Transaction</a>
-              <a href="/vk" class="block px-3 py-2 text-white hover:bg-indigo-600 rounded-md">Viewing Key</a>
-            </div>
-          </nav>
-        </header>
+	      <!-- Desktop Navigation -->
+	      <div class="hidden lg:flex items-center gap-x-8 text-sm font-medium flex-shrink-0">
+		<a href="/mempool" class="hover:text-white/80 transition-colors">Mempool</a>
+		<a href="/blocks" class="hover:text-white/80 transition-colors">Blocks</a>
+		<a href="/nodes" class="hover:text-white/80 transition-colors">Nodes</a>
+		<a href="/broadcast" class="hover:text-white/80 transition-colors">Broadcast</a>
+		<%= if @zcash_network != "testnet" do %>
+		  <a href="/vk" class="hover:text-white/80 transition-colors">Viewing Key</a>
+		<% end %>
+	      </div>
+	    </div>
+	  </div>
+	</header>
 
         <!-- Page content (your original stats) -->
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
