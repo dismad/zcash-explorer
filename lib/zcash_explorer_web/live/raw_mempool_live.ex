@@ -1,6 +1,5 @@
 defmodule ZcashExplorerWeb.RawMempoolLive do
   use Phoenix.LiveView, layout: false
-  #import ZcashExplorerWeb.TransactionHelper
 
   @impl true
   def mount(_params, session, socket) do
@@ -45,7 +44,6 @@ defmodule ZcashExplorerWeb.RawMempoolLive do
         <link rel="stylesheet" href="/css/app.css">
       </head>
       <body class="bg-gray-50 dark:bg-gray-900">
-
         <!-- Header only on standalone /mempool page -->
         <%= if @standalone do %>
           <header>
@@ -67,7 +65,6 @@ defmodule ZcashExplorerWeb.RawMempoolLive do
                       <% end %>
                     </a>
                   </div>
-
                   <!-- Search -->
                   <div class="flex-1 flex justify-center lg:justify-end">
                     <div class="w-full px-2 lg:px-6">
@@ -83,7 +80,6 @@ defmodule ZcashExplorerWeb.RawMempoolLive do
                       </form>
                     </div>
                   </div>
-
                   <!-- Desktop nav -->
                   <div class="hidden lg:block lg:w-80 z-40">
                     <div class="flex items-center justify-end">
@@ -96,7 +92,6 @@ defmodule ZcashExplorerWeb.RawMempoolLive do
                   </div>
                 </div>
               </div>
-
               <!-- Mobile menu -->
               <div x-show="open" class="lg:hidden bg-indigo-700 dark:bg-gray-900 px-2 pt-2 pb-3">
                 <a href="/mempool" class="block px-3 py-2 text-white hover:bg-indigo-600 rounded-md">Mempool</a>
@@ -131,35 +126,35 @@ defmodule ZcashExplorerWeb.RawMempoolLive do
                     </td>
                     <td class="px-4 py-4 whitespace-nowrap text-sm font-medium"><%= tx["info"]["height"] %></td>
                     <td class="px-4 py-4 whitespace-nowrap text-sm font-medium"><%= mined_time_rel(tx["info"]["time"]) %></td>
-                    <td class="px-4 py-4 whitespace-nowrap text-sm font-medium"><%= format_zec(tx["info"]["fee"]) %></td>
+                    <!-- Correct fee: use the pre-computed fee from Zebra -->
+                    <td class="px-4 py-4 whitespace-nowrap text-sm font-medium"><%= format_zec(tx["info"]["fee"]) %> ZEC</td>
                     <td class="px-4 py-4 whitespace-nowrap text-sm font-medium"><%= tx["info"]["size"] %></td>
                     <td class="px-4 py-4 whitespace-nowrap">
-			  <%= case tx["type"] do %>
-			    <% "coinbase" -> %> <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-400 text-gray-900 capitalize">💰 Coinbase</span>
-			    <% "shielded" -> %> <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-200 text-gray-900 capitalize">🛡 Shielded</span>
-			    <% "sapling" -> %> <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-200 text-gray-900 capitalize">🛡️ Sapling</span>
-			    <% "sprout" -> %> <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-200 text-gray-900 capitalize">🌱 Sprout</span>
-			    <% "transparent" -> %> <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-200 text-gray-900 capitalize">🔍 Public</span>
-			    <% "shielding" -> %> <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-50 text-gray-900 capitalize">Shielding (T-Z)</span>
-			    <% "deshielding" -> %> <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-50 text-gray-900 capitalize">Deshielding (Z-T)</span>
-			    <% "mixed" -> %> <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-200 text-gray-900 capitalize">Mixed</span>
-			    <% "orchard" -> %> <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-200 text-gray-900 capitalize">🌳 Orchard</span>
-			    <% _ -> %> <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-200 text-gray-900">Unknown</span>
-			  <% end %>
-			</td>
+                      <%= case tx["type"] do %>
+                        <% "coinbase" -> %> <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-400 text-gray-900 capitalize">💰 Coinbase</span>
+                        <% "shielded" -> %> <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-200 text-gray-900 capitalize">🛡 Shielded</span>
+                        <% "sapling" -> %> <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-200 text-gray-900 capitalize">🛡️ Sapling</span>
+                        <% "sprout" -> %> <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-200 text-gray-900 capitalize">🌱 Sprout</span>
+                        <% "transparent" -> %> <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-200 text-gray-900 capitalize">🔍 Public</span>
+                        <% "shielding" -> %> <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-50 text-gray-900 capitalize">Shielding (T-Z)</span>
+                        <% "deshielding" -> %> <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-50 text-gray-900 capitalize">Deshielding (Z-T)</span>
+                        <% "mixed" -> %> <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-200 text-gray-900 capitalize">Mixed</span>
+                        <% "orchard" -> %> <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-200 text-gray-900 capitalize">🌳 Orchard</span>
+                        <% _ -> %> <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-200 text-gray-900">Unknown</span>
+                      <% end %>
+                    </td>
                   </tr>
                 <% end %>
               </tbody>
             </table>
           </div>
         </div>
-
       </body>
     </html>
     """
   end
 
-  # Helpers
+  # Your existing helpers
   defp mined_time_rel(unix_timestamp) when is_integer(unix_timestamp) do
     Timex.from_unix(unix_timestamp) |> Timex.format!("{relative}", :relative)
   end
@@ -168,9 +163,8 @@ defmodule ZcashExplorerWeb.RawMempoolLive do
   defp format_zec(amount) when is_number(amount) do
     amount
     |> Decimal.from_float()
-    |> Decimal.div(Decimal.new(100_000_000))
     |> Decimal.round(8)
-    |> Decimal.to_string()
+    |> Decimal.to_string(:normal)
   end
   defp format_zec(_), do: "—"
 end

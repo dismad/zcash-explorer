@@ -10,9 +10,19 @@ defmodule ZcashExplorerWeb.TransactionLive do
     case Zcashex.getrawtransaction(txid, 1) do
       {:ok, tx_map} ->
         tx = Zcashex.Transaction.from_map(tx_map)
-        {:ok, assign(socket, tx: tx, txid: txid, zcash_network: network, standalone: standalone)}
+        {:ok, assign(socket,
+          tx: tx,
+          txid: txid,
+          zcash_network: network,
+          standalone: standalone
+        )}
       _ ->
-        {:ok, assign(socket, tx: nil, txid: txid, zcash_network: network, standalone: standalone)}
+        {:ok, assign(socket,
+          tx: nil,
+          txid: txid,
+          zcash_network: network,
+          standalone: standalone
+        )}
     end
   end
 
@@ -29,7 +39,6 @@ defmodule ZcashExplorerWeb.TransactionLive do
         <link rel="stylesheet" href="/css/app.css">
       </head>
       <body class="bg-gray-50 dark:bg-gray-900">
-
         <%= if @standalone do %>
           <header>
             <nav x-data="{ open: false }" class="shrink-0 bg-indigo-600 dark:bg-gray-800">
@@ -49,7 +58,6 @@ defmodule ZcashExplorerWeb.TransactionLive do
                       <% end %>
                     </a>
                   </div>
-
                   <div class="flex-1 flex justify-center lg:justify-end">
                     <div class="w-full px-2 lg:px-6">
                       <form action="/search">
@@ -64,7 +72,6 @@ defmodule ZcashExplorerWeb.TransactionLive do
                       </form>
                     </div>
                   </div>
-
                   <div class="hidden lg:block lg:w-80 z-40">
                     <div class="flex items-center justify-end">
                       <a href="/mempool" class="px-3 py-2 rounded-md text-sm font-medium text-indigo-200 hover:text-white dark:text-gray-400">Mempool</a>
@@ -82,7 +89,6 @@ defmodule ZcashExplorerWeb.TransactionLive do
 
         <div class="mx-auto px-4 py-8">
           <h1 class="text-2xl font-semibold mb-6">Details for the Zcash Transaction ID <%= @txid %></h1>
-
           <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
               <dl class="space-y-4">
@@ -90,7 +96,7 @@ defmodule ZcashExplorerWeb.TransactionLive do
                 <div class="flex justify-between"><dt class="text-gray-500">Block Id</dt><dd class="font-medium"><%= @tx && @tx.height %></dd></div>
                 <div class="flex justify-between"><dt class="text-gray-500">JoinSplits ?</dt><dd><%= if length(@tx && @tx.vjoinsplit || []) > 0, do: "Yes", else: "No" %></dd></div>
                 <div class="flex justify-between"><dt class="text-gray-500">Size (bytes)</dt><dd><%= @tx && @tx.size %></dd></div>
-                <div class="flex justify-between"><dt class="text-gray-500">Transaction fee</dt><dd><%= format_zec(@tx && @tx.valueBalance || 0) %> ZEC</dd></div>
+                <div class="flex justify-between"><dt class="text-gray-500">Transaction fee</dt><dd><%= format_zec(tx_fee(@tx)) %> ZEC</dd></div>
               </dl>
             </div>
 
@@ -162,12 +168,58 @@ defmodule ZcashExplorerWeb.TransactionLive do
             </div>
           </div>
         </div>
-
       </body>
     </html>
     """
   end
 
+  # === Accurate fee (exact match to block_live.ex and your Rust tool) ===
+  defp tx_fee(nil), do: 0.0
+  defp tx_fee(tx) do
+    if is_coinbase?(tx) do
+      0.0
+    else
+      vin_sum = calculate_vin_sum(tx)
+      vout_sum = calculate_vout_sum(tx)
+      vpub_old = calculate_vpub_old(tx)
+      vpub_new = calculate_vpub_new(tx)
+      sapling = tx.valueBalanceZat || 0
+      orchard = tx.orchard && tx.orchard.valueBalanceZat || 0
+
+      fee_zats = vin_sum - vout_sum - vpub_old + vpub_new + sapling + orchard
+      fee_zats / 100_000_000.0
+    end
+  end
+
+  defp is_coinbase?(tx) do
+    tx.vin && length(tx.vin) > 0 && hd(tx.vin).coinbase != nil
+  end
+
+  defp calculate_vin_sum(tx) do
+    Enum.reduce(tx.vin || [], 0, fn vin, acc ->
+      acc + (vin.valueZat || vin.valueSat || 0)
+    end)
+  end
+
+  defp calculate_vout_sum(tx) do
+    Enum.reduce(tx.vout || [], 0, fn vout, acc ->
+      acc + (vout.valueZat || vout.value || 0)
+    end)
+  end
+
+  defp calculate_vpub_old(tx) do
+    Enum.reduce(tx.vjoinsplit || [], 0, fn j, acc ->
+      acc + (j.vpub_oldZat || 0)
+    end)
+  end
+
+  defp calculate_vpub_new(tx) do
+    Enum.reduce(tx.vjoinsplit || [], 0, fn j, acc ->
+      acc + (j.vpub_newZat || 0)
+    end)
+  end
+
+  # Your existing helpers (unchanged)
   defp first_address(vout) do
     case vout && vout.scriptPubKey && vout.scriptPubKey.addresses do
       addresses when is_list(addresses) and length(addresses) > 0 -> hd(addresses)
@@ -181,9 +233,8 @@ defmodule ZcashExplorerWeb.TransactionLive do
   defp format_zec(amount) when is_number(amount) do
     amount
     |> Decimal.from_float()
-    |> Decimal.div(Decimal.new(100_000_000))
     |> Decimal.round(8)
-    |> Decimal.to_string()
+    |> Decimal.to_string(:normal)
   end
-  defp format_zec(_), do: "0.0"
+  defp format_zec(_), do: "0.00000000"
 end
