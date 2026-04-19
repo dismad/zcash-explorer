@@ -1,103 +1,21 @@
-<div class="grid gap-4 grid-cols-1 mx-8 py-5">
-
-<div>
+<div class="grid gap-6 py-8">
+  <!-- 4 statistic cards -->
   <dl class="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
-
-    <div class="relative bg-white pt-5 px-4 pb-12 sm:pt-6 sm:px-6 shadow rounded-lg overflow-hidden dark:bg-gray-800">
-      <dt>
-        <div class="absolute bg-green-500 rounded-md p-3">
-<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"></path>
-         </svg>
-        </div>
-        <p class="ml-16 text-sm font-medium text-gray-500 truncate">Orchard Pool</p>
-      </dt>
-      <dd class="ml-16 pb-6 flex items-baseline sm:pb-7">
-         <%= live_render(@conn, ZcashExplorerWeb.OrchardPoolLive) %>
-      <div class="absolute bottom-0 inset-x-0 bg-gray-50 px-4 py-4 sm:px-6 dark:bg-gray-700">
-          <div class="text-sm">
-            <a href="/blockchain-info" class="font-medium text-indigo-600 hover:text-indigo-500 dark:text-white dark:hover:text-slate-50">View blockchain info<span class="sr-only"> View blockchain info</span></a>
-      </div>
-      </div>
-      </dd>
-    </div>
-
-
-    <div class="relative bg-white pt-5 px-4 pb-12 sm:pt-6 sm:px-6 shadow rounded-lg overflow-hidden dark:bg-gray-800">
-      <dt>
-        <div class="absolute bg-green-500 rounded-md p-3">
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
-       </svg>
-        </div>
-        <p class="ml-16 text-sm font-medium text-gray-500 truncate">Blocks</p>
-      </dt>
-      <dd class="ml-16 pb-6 flex items-baseline sm:pb-7">
-
-          <%= live_render(@conn, ZcashExplorerWeb.BlockCountLive) %>
-
-        <div class="absolute bottom-0 inset-x-0 bg-gray-50 px-4 py-4 sm:px-6 dark:bg-gray-700">
-          <div class="text-sm">
-            <a href="/blocks" class="font-medium text-indigo-600 hover:text-indigo-500 dark:text-white dark:hover:text-slate-50"> View blocks<span class="sr-only"> View blocks</span></a>
-          </div>
-        </div>
-      </dd>
-    </div>
-
-    <div class="relative bg-white pt-5 px-4 pb-12 sm:pt-6 sm:px-6 shadow rounded-lg overflow-hidden dark:bg-gray-800">
-      <dt>
-        <div class="absolute bg-indigo-500 rounded-md p-3">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-          </svg>        
-        </div>
-      <p class="ml-16 text-sm font-medium text-gray-500 truncate">Mempool Transactions</p>
-      </dt>
-      <dd class="ml-16 pb-6 flex items-baseline sm:pb-7">
-         <%= live_render(@conn, ZcashExplorerWeb.MempoolInfoLive) %>
-      <div class="absolute bottom-0 inset-x-0 bg-gray-50 px-4 py-4 sm:px-6 dark:bg-gray-700">
-        <div class="text-sm">
-            <a href="/mempool" class="font-medium text-indigo-600 hover:text-indigo-500 dark:text-white dark:hover:text-slate-50">View mempool transactions<span class="sr-only"> View mempool transactions</span></a>
-        </div>
-      </div>
-      </dd>
-    </div>
-
-    <div class="relative bg-white pt-5 px-4 pb-12 sm:pt-6 sm:px-6 shadow rounded-lg overflow-hidden dark:bg-gray-800">
-      <dt>
-        <div class="absolute bg-green-500 rounded-md p-3">
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
-        </svg>
-        </div>
-        <p class="ml-16 text-sm font-medium text-gray-500 truncate">Blockchain Size</p>
-      </dt>
-      <dd class="ml-16 pb-6 flex items-baseline sm:pb-7">
-         <%= live_render(@conn, ZcashExplorerWeb.BlockChainSizeLive) %>
-      <div class="absolute bottom-0 inset-x-0 bg-gray-50 px-4 py-4 sm:px-6 dark:bg-gray-700">
-          <div class="text-sm">
-            <a href="/blockchain-info" class="font-medium text-indigo-600 hover:text-indigo-500 dark:text-white dark:hover:text-slate-50">View blockchain info<span class="sr-only"> View blockchain info</span></a>
-      </div>
-      </div>
-      </dd>
-    </div>
+    <%= live_render(@conn, ZcashExplorerWeb.OrchardPoolLive) %>
+    <%= live_render(@conn, ZcashExplorerWeb.BlockCountLive) %>
+    <%= live_render(@conn, ZcashExplorerWeb.MempoolInfoLive) %>
+    <%= live_render(@conn, ZcashExplorerWeb.BlockChainSizeLive) %>
   </dl>
-</div>
 
-<div class="grid gap-4 grid-cols-1  md:grid-cols-1 mx-4 my-2">
-    <div>
-        <h3 class="text-lg leading-6 font-medium text-midnight-500 py-3 dark:text-white">
-        Recent Blocks
-        </h3>
-        <%= live_render(@conn, ZcashExplorerWeb.RecentBlocksLive) %>
-    </div>
-</div>
+  <!-- Recent Blocks -->
+  <div>
+    <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-3">Recent Blocks</h3>
+    <%= live_render(@conn, ZcashExplorerWeb.RecentBlocksLive) %>
+  </div>
 
-<div>
-    <h3 class="text-lg leading-6 font-medium text-gray-900 py-3 dark:text-white">
-    Recent Transactions
-    </h3>
+  <!-- Recent Transactions -->
+  <div>
+    <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-3">Recent Transactions</h3>
     <%= live_render(@conn, ZcashExplorerWeb.RecentTransactionsLive) %>
-</div>
-
+  </div>
 </div>

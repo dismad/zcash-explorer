@@ -5,36 +5,32 @@ defmodule ZcashExplorer.Blocks.BlockWarmer do
   @doc """
   Returns the interval for this warmer.
   """
-  def interval,
-    do: :timer.seconds(15)
+  def interval, do: :timer.seconds(15)
 
   @doc """
   Executes this cache warmer.
   """
   def execute(_state) do
-
-    # get the blocks mined in that duration
     case Zcashex.getblockcount() do
       {:ok, n} ->
-        #from
         blocks =
-          Enum.to_list(n - 20..n)
+          Enum.to_list((n - 20)..n)
           |> Enum.map(fn x ->
             {:ok, block} = Zcashex.getblock(x, 2)
             block
           end)
 
-        blocks|> Enum.map(fn x ->
-
+        blocks
+        |> Enum.map(fn x ->
           block_struct = Zcashex.Block.from_map(x)
 
           %{
             "height" => block_struct.height,
             "size" => block_struct.size,
             "hash" => block_struct.hash,
-            "time" => ZcashExplorerWeb.BlockView.mined_time(block_struct.time),
-            "tx_count" => ZcashExplorerWeb.BlockView.transaction_count(block_struct.tx),
-            "output_total" => ZcashExplorerWeb.BlockView.output_total(block_struct.tx)
+            "time" => ZcashExplorerWeb.Helpers.mined_time(block_struct.time),
+            "tx_count" => length(block_struct.tx || []),
+            "output_total" => ZcashExplorerWeb.Helpers.output_total(block_struct.tx || [])
           }
         end)
         |> Enum.sort(&(&1["height"] >= &2["height"]))
@@ -47,7 +43,7 @@ defmodule ZcashExplorer.Blocks.BlockWarmer do
 
   # ignores the warmer result in case of error
   defp handle_result({:error, reason}) do
-    Logger.error("Error while warming the block cache.#{inspect(reason)}")
+    Logger.error("Error while warming the block cache. #{inspect(reason)}")
     :ignore
   end
 

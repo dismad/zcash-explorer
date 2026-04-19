@@ -1,56 +1,57 @@
 defmodule ZcashExplorerWeb.VkLive do
   use ZcashExplorerWeb, :live_view
-  import Phoenix.LiveView.Helpers
+
   @impl true
   def render(%{message: %{"txs" => []}} = assigns) do
-    ~L"""
-    <div id="clogsholder" class="text-green-400 font-mono break-all overscroll-auto overflow-auto mx-16 h-28  min-h-full border-solid  rounded-md border-opacity-25 shadow-inner border-4 border-light-blue-500 " phx-hook="VkContainerLog">
-    <div id="clogs min-h-full">
-    <%= @message["message"] %>
+    ~H"""
+    <div id="clogsholder" class="text-green-400 font-mono break-all overscroll-auto overflow-auto mx-16 h-28 min-h-full border-solid rounded-md border-opacity-25 shadow-inner border-4 border-light-blue-500 " phx-hook="VkContainerLog">
+      <div id="clogs min-h-full">
+        <%= @message["message"] %>
+      </div>
     </div>
-    </div>
-     """
+    """
   end
 
   @impl true
   def render(assigns) do
-    ~L"""
-    <%= if length(@message["txs"]) > 0  do %>
-    <div class="shadow overflow-hidden border-b border-gray-200 rounded-lg overflow-x-auto">
-    <table class="min-w-full divide-y divide-gray-200">
-      <thead class="bg-gray-50">
-      <tr>
-         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-midnight-500 uppercase tracking-wider">Tx</th>
-         <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-midnight-500 uppercase tracking-wider">Amount</th>
-          <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-midnight-500 uppercase tracking-wider">Address</th>
-          <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-midnight-500 uppercase tracking-wider">Date</th>
-          <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-midnight-500 uppercase tracking-wider">Memo</th>
-        </tr>
-       </thead>
-      <tbody class="bg-white-500 divide-y divide-gray-200">
-    <%= for tx <- @message["txs"] do %>
-    <tr class="hover:bg-indigo-50">
-     <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-indigo-600 hover:text-indigo-500">
-        <a href='/transactions/<%= tx["txid"] %>' target="_blank">
-        <%= tx["txid"] %>
-        </a>
-    </td>
-    <td class="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-500">
-        <%= ZcashExplorerWeb.AddressView.zatoshi_to_zec(tx["amount"]) %>
-    </td>
-    <td class="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-500">
-        <%= tx["address"] %>
-    </td>
-    <td class="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-500">
-        <%= ZcashExplorerWeb.BlockView.mined_time_rel(tx["datetime"]) %>
-    </td>
-    <td class="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-500 break-all">
-        <%= tx["memo"] %>
-    </td>
-           </tr>
-    <% end %>
-     </tbody>
-    </table>
+    ~H"""
+    <%= if length(@message["txs"]) > 0 do %>
+      <div class="shadow overflow-hidden border-b border-gray-200 rounded-lg overflow-x-auto">
+        <table class="min-w-full divide-y divide-gray-200">
+          <thead class="bg-gray-50">
+            <tr>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-midnight-500 uppercase tracking-wider">Tx</th>
+              <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-midnight-500 uppercase tracking-wider">Amount</th>
+              <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-midnight-500 uppercase tracking-wider">Address</th>
+              <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-midnight-500 uppercase tracking-wider">Date</th>
+              <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-midnight-500 uppercase tracking-wider">Memo</th>
+            </tr>
+          </thead>
+          <tbody class="bg-white-500 divide-y divide-gray-200">
+            <%= for tx <- @message["txs"] do %>
+              <tr class="hover:bg-indigo-50">
+                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-indigo-600 hover:text-indigo-500">
+                  <a href={"/transactions/#{tx["txid"]}"} target="_blank">
+                    <%= tx["txid"] %>
+                  </a>
+                </td>
+                <td class="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-500">
+                  <%= ZcashExplorerWeb.AddressView.zatoshi_to_zec(tx["amount"]) %>
+                </td>
+                <td class="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-500">
+                  <%= tx["address"] %>
+                </td>
+                <td class="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-500">
+                  <%= ZcashExplorerWeb.BlockView.mined_time_rel(tx["datetime"]) %>
+                </td>
+                <td class="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-500 break-all">
+                  <%= tx["memo"] %>
+                </td>
+              </tr>
+            <% end %>
+          </tbody>
+        </table>
+      </div>
     <% end %>
     """
   end
@@ -92,7 +93,6 @@ defmodule ZcashExplorerWeb.VkLive do
   @impl true
   def handle_info({:received_txs, txs}, socket) do
     Cachex.decr!(:app_cache, "nbjobs")
-
     {:noreply,
      assign(socket, :message, %{
        "message" => "Got list of txs",
@@ -104,7 +104,6 @@ defmodule ZcashExplorerWeb.VkLive do
   @impl true
   def terminate(reason, socket) do
     container_id = socket.assigns.message["container_id"]
-
     if disconnected?(reason) do
       Cachex.decr!(:app_cache, "nbjobs")
       # stop the container when the user is no longer connected to the Socket

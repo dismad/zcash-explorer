@@ -27,56 +27,51 @@ defmodule ZcashExplorerWeb.BlockController do
     end
   end
 
-
-
-  def index(conn, _params) do
+  def index(conn, params) do
     max_concurrency = System.schedulers_online() * 2
-    limit= String.to_integer(Map.get(_params, "limit", "20"))
+    limit = String.to_integer(Map.get(params, "limit", "20"))
 
+    block = params["block"]
 
-    block = _params["block"]
-
-    from_block=
+    from_block =
       if is_nil(block) do
-         case Zcashex.getblockcount() do
-              {:ok, n} ->
-                n
-            end
-        else
-          String.to_integer(block)
+        case Zcashex.getblockcount() do
+          {:ok, n} ->
+            n
         end
+      else
+        String.to_integer(block)
+      end
 
-    to_block=max(from_block - limit,0)
+    to_block = max(from_block - limit, 0)
     disable_previous = if is_nil(block), do: true, else: false
     disable_next = if from_block == 0, do: true, else: false
 
-        blocks =
-          Enum.to_list(to_block..from_block)
-          |> Enum.map(fn x ->
-            {:ok, block} = Zcashex.getblock(x, 2)
-            block["hash"]
+    blocks =
+      Enum.to_list(to_block..from_block)
+      |> Enum.map(fn x ->
+        {:ok, block} = Zcashex.getblock(x, 2)
+        block["hash"]
+      end)
 
-          end)
-        blocks_data =
-          blocks
-          |> Task.async_stream(fn block -> Zcashex.getblockheader(block) end,
-            max_concurrency: max_concurrency,
-            ordered: false
-          )
-          |> Enum.to_list()
-          |> Enum.map(fn {task, {:ok, res}} -> res end)
-          |> Enum.reverse()
+    blocks_data =
+      blocks
+      |> Task.async_stream(fn block -> Zcashex.getblockheader(block) end,
+        max_concurrency: max_concurrency,
+        ordered: false
+      )
+      |> Enum.to_list()
+      |> Enum.map(fn {_task, {:ok, res}} -> res end)
+      |> Enum.reverse()
 
-        render(conn, "blocks.html",
-          blocks_data: blocks_data,
-          disable_next: disable_next,
-          disable_previous: disable_previous,
-          date: "",
-          previous: from_block+ limit,
-          next: to_block,
-
-          page_title: "Zcash latest blocks"
-        )
-
+    render(conn, "blocks.html",
+      blocks_data: blocks_data,
+      disable_next: disable_next,
+      disable_previous: disable_previous,
+      date: "",
+      previous: from_block + limit,
+      next: to_block,
+      page_title: "Zcash latest blocks"
+    )
   end
 end

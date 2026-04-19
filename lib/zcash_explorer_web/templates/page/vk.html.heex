@@ -7,7 +7,7 @@
       <div class="space-y-8 divide-y divide-gray-200 sm:space-y-5">
     <div>
 
-<%= if get_flash(@conn, :error) do %>
+<%= if Phoenix.Flash.get(@flash, :error) do %>
  <div class="rounded-md bg-red-50 p-4">
   <div class="flex">
     <div class="shrink-0">
@@ -23,7 +23,7 @@
       <div class="mt-2 text-sm text-red-700">
         <ul class="list-disc pl-5 space-y-1">
           <li>
-            <%= get_flash(@conn, :error) %>
+            <%= Phoenix.Flash.get(@flash, :error) %>
           </li>
         </ul>
       </div>
