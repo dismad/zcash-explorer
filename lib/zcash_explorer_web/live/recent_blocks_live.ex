@@ -11,8 +11,11 @@ defmodule ZcashExplorerWeb.RecentBlocksLive do
     case Cachex.get(:app_cache, "block_cache") do
       {:ok, info} ->
         {:ok, %{"chain" => chain}} = Cachex.get(:app_cache, "metrics")
+        blocks_to_show = if standalone, do: info, else: Enum.take(info, 12)
+
         {:ok, assign(socket,
           block_cache: info,
+          blocks_to_show: blocks_to_show,
           chain: chain,
           zcash_network: network,
           standalone: standalone
@@ -21,6 +24,7 @@ defmodule ZcashExplorerWeb.RecentBlocksLive do
       _ ->
         {:ok, assign(socket,
           block_cache: [],
+          blocks_to_show: [],
           chain: "main",
           zcash_network: network,
           standalone: standalone
@@ -32,14 +36,16 @@ defmodule ZcashExplorerWeb.RecentBlocksLive do
   def handle_info(:update, socket) do
     Process.send_after(self(), :update, 1000)
     {:ok, info} = Cachex.get(:app_cache, "block_cache")
-    {:noreply, assign(socket, :block_cache, info)}
+    blocks_to_show = if socket.assigns.standalone, do: info, else: Enum.take(info, 12)
+
+    {:noreply, assign(socket,
+      block_cache: info,
+      blocks_to_show: blocks_to_show
+    )}
   end
 
   @impl true
   def render(assigns) do
-    # Show only 12 blocks when embedded on homepage, show all when visiting /blocks directly
-    blocks_to_show = if assigns.standalone, do: assigns.block_cache, else: Enum.take(assigns.block_cache, 12)
-
     ~H"""
     <!DOCTYPE html>
     <html lang="en">
@@ -51,9 +57,8 @@ defmodule ZcashExplorerWeb.RecentBlocksLive do
         <link rel="stylesheet" href="/css/app.css">
       </head>
       <body class="bg-gray-50 dark:bg-gray-900">
-
-        <!-- Header only on standalone /blocks page -->
         <%= if @standalone do %>
+          <!-- Full header only when visiting /blocks directly -->
           <header>
             <nav x-data="{ open: false }" class="shrink-0 bg-indigo-600 dark:bg-gray-800">
               <div class="max-w-7xl mx-auto px-2 sm:px-4 lg:px-8">
@@ -73,7 +78,6 @@ defmodule ZcashExplorerWeb.RecentBlocksLive do
                       <% end %>
                     </a>
                   </div>
-
                   <!-- Search -->
                   <div class="flex-1 flex justify-center lg:justify-end">
                     <div class="w-full px-2 lg:px-6">
@@ -89,7 +93,6 @@ defmodule ZcashExplorerWeb.RecentBlocksLive do
                       </form>
                     </div>
                   </div>
-
                   <!-- Desktop nav -->
                   <div class="hidden lg:block lg:w-80 z-40">
                     <div class="flex items-center justify-end">
@@ -102,21 +105,12 @@ defmodule ZcashExplorerWeb.RecentBlocksLive do
                   </div>
                 </div>
               </div>
-
-              <!-- Mobile menu -->
-              <div x-show="open" class="lg:hidden bg-indigo-700 dark:bg-gray-900 px-2 pt-2 pb-3">
-                <a href="/mempool" class="block px-3 py-2 text-white hover:bg-indigo-600 rounded-md">Mempool</a>
-                <a href="/blocks" class="block px-3 py-2 text-white hover:bg-indigo-600 rounded-md">Blocks</a>
-                <a href="/nodes" class="block px-3 py-2 text-white hover:bg-indigo-600 rounded-md">Nodes</a>
-                <a href="/broadcast" class="block px-3 py-2 text-white hover:bg-indigo-600 rounded-md">Broadcast Transaction</a>
-                <a href="/vk" class="block px-3 py-2 text-white hover:bg-indigo-600 rounded-md">Viewing Key</a>
-              </div>
             </nav>
           </header>
         <% end %>
 
-        <!-- ===== TABLE (full width) ===== -->
-        <div class="w-full px-4 py-8">
+        <!-- Table -->
+        <div class="w-full">
           <div class="shadow overflow-hidden border-gray-200 rounded-lg overflow-x-auto">
             <table class="w-full text-sm text-left text-gray-500 dark:text-gray-400">
               <thead class="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">
@@ -130,9 +124,9 @@ defmodule ZcashExplorerWeb.RecentBlocksLive do
                 </tr>
               </thead>
               <tbody>
-                <%= for block <- blocks_to_show do %>
+                <%= for block <- @blocks_to_show do %>
                   <tr class="bg-white border-b dark:bg-gray-800 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600">
-                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-indigo-600 hover:text-indigo-500 dark:text-white dark:hover:text-white">
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-indigo-600 hover:text-indigo-500 dark:text-white">
                       <a href={"/blocks/#{block["height"]}"}><%= block["height"] %></a>
                     </td>
                     <td class="px-4 py-4 whitespace-nowrap">

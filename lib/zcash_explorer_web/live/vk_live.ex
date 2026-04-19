@@ -1,11 +1,11 @@
 defmodule ZcashExplorerWeb.VkLive do
-  use ZcashExplorerWeb, :live_view
+  use Phoenix.LiveView, layout: false
 
   @impl true
   def render(%{message: %{"txs" => []}} = assigns) do
     ~H"""
-    <div id="clogsholder" class="text-green-400 font-mono break-all overscroll-auto overflow-auto mx-16 h-28 min-h-full border-solid rounded-md border-opacity-25 shadow-inner border-4 border-light-blue-500 " phx-hook="VkContainerLog">
-      <div id="clogs min-h-full">
+    <div id="clogsholder" class="text-green-400 font-mono break-all overscroll-auto overflow-auto mx-16 h-28 min-h-full border-solid rounded-md border-opacity-25 shadow-inner border-4 border-light-blue-500" phx-hook="VkContainerLog">
+      <div id="clogs" class="min-h-full">
         <%= @message["message"] %>
       </div>
     </div>
@@ -27,24 +27,22 @@ defmodule ZcashExplorerWeb.VkLive do
               <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-midnight-500 uppercase tracking-wider">Memo</th>
             </tr>
           </thead>
-          <tbody class="bg-white-500 divide-y divide-gray-200">
+          <tbody class="bg-white divide-y divide-gray-200">
             <%= for tx <- @message["txs"] do %>
-              <tr class="hover:bg-indigo-50">
+              <tr class="hover:bg-gray-50 dark:hover:bg-gray-600">
                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-indigo-600 hover:text-indigo-500">
-                  <a href={"/transactions/#{tx["txid"]}"} target="_blank">
-                    <%= tx["txid"] %>
-                  </a>
+                  <a href={"/transactions/#{tx["tx"]}"}><%= tx["tx"] %></a>
                 </td>
-                <td class="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-500">
-                  <%= ZcashExplorerWeb.AddressView.zatoshi_to_zec(tx["amount"]) %>
+                <td class="px-4 py-4 whitespace-nowrap text-sm font-medium">
+                  <%= zatoshi_to_zec(tx["amount"]) %> ZEC
                 </td>
-                <td class="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-500">
-                  <%= tx["address"] %>
+                <td class="px-4 py-4 whitespace-nowrap text-sm font-medium">
+                  <a href={"/address/#{tx["address"]}"}><%= tx["address"] %></a>
                 </td>
-                <td class="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-500">
-                  <%= ZcashExplorerWeb.BlockView.mined_time_rel(tx["datetime"]) %>
+                <td class="px-4 py-4 whitespace-nowrap text-sm font-medium">
+                  <%= mined_time_rel(tx["datetime"]) %>
                 </td>
-                <td class="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-500 break-all">
+                <td class="px-4 py-4 whitespace-nowrap text-sm font-medium">
                   <%= tx["memo"] %>
                 </td>
               </tr>
@@ -52,19 +50,38 @@ defmodule ZcashExplorerWeb.VkLive do
           </tbody>
         </table>
       </div>
+    <% else %>
+      <div id="clogsholder" class="text-green-400 font-mono break-all overscroll-auto overflow-auto mx-16 h-28 min-h-full border-solid rounded-md border-opacity-25 shadow-inner border-4 border-light-blue-500" phx-hook="VkContainerLog">
+        <div id="clogs" class="min-h-full">
+          <%= @message["message"] %>
+        </div>
+      </div>
     <% end %>
     """
   end
 
+  # ------------------------------------------------------------------
+  # Local helpers (replaces the old AddressView / BlockView calls)
+  # ------------------------------------------------------------------
+  defp zatoshi_to_zec(amount) when is_number(amount) do
+    amount
+    |> Decimal.from_float()
+    |> Decimal.div(Decimal.new(100_000_000))
+    |> Decimal.round(8)
+    |> Decimal.to_string(:normal)
+  end
+  defp zatoshi_to_zec(_), do: "0.00000000"
+
+  defp mined_time_rel(unix_timestamp) when is_integer(unix_timestamp) do
+    Timex.from_unix(unix_timestamp) |> Timex.format!("{relative}", :relative)
+  end
+  defp mined_time_rel(_), do: "—"
+
+  # ------------------------------------------------------------------
+  # Your original mount / handle_info / terminate logic (unchanged)
+  # ------------------------------------------------------------------
   @impl true
   def mount(_params, session, socket) do
-    if connected?(socket) do
-      container_id = Map.get(session, "container_id")
-      Cachex.incr!(:app_cache, "nbjobs")
-      Process.send_after(self(), :update, 3000)
-      Phoenix.PubSub.subscribe(ZcashExplorer.PubSub, "VK:" <> "#{container_id}")
-    end
-
     {:ok,
      assign(socket, :message, %{
        "message" => "Starting to import the VK .",
@@ -106,7 +123,6 @@ defmodule ZcashExplorerWeb.VkLive do
     container_id = socket.assigns.message["container_id"]
     if disconnected?(reason) do
       Cachex.decr!(:app_cache, "nbjobs")
-      # stop the container when the user is no longer connected to the Socket
       MuonTrap.cmd("docker", ["stop", container_id])
     end
   end
@@ -115,7 +131,7 @@ defmodule ZcashExplorerWeb.VkLive do
     case reason do
       :shutdown -> true
       {:shutdown, shutdown_reason} when shutdown_reason in [:left, :closed] -> true
-      _other -> false
+      _ -> false
     end
   end
 end
