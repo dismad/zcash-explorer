@@ -130,4 +130,20 @@ defmodule ZcashExplorerWeb.AddressController do
     end)
     |> Enum.sum()
   end
+
+  def redirect_ua(conn, %{"address" => address}) do
+    conn
+    |> put_status(:moved_permanently)
+    |> redirect(to: "/address/#{URI.encode_www_form(address)}")
+  end
+
+  def redirect_z(conn, %{"address" => address}) do
+    conn
+    |> put_status(:moved_permanently)
+    |> redirect(to: "/address/#{URI.encode_www_form(address)}")
+  end
+
+
+
+
 end

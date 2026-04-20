@@ -29,6 +29,10 @@ defmodule ZcashExplorerWeb.Router do
     live "/broadcast", BroadcastLive
     live "/vk", VkLive
 
+    # Shielded addresses (z1..., zs1..., u1...) — single LiveView
+    live "/shielded/:address", ShieldedAddressLive
+    live "/ua/:address", ShieldedAddressLive
+
     # Metric / helper LiveViews
     live "/price", PriceLive
     live "/metrics/difficulty", DifficultyLive
@@ -41,8 +45,7 @@ defmodule ZcashExplorerWeb.Router do
 
     # Search and Address pages
     get "/search", SearchController, :search
-    live "/address/:address", AddressLive          # ← changed to LiveView
-    get "/ua/:address", AddressController, :get_ua
+    live "/address/:address", AddressLive
 
     post "/broadcast", PageController, :do_broadcast
     get "/payment-disclosure", PageController, :disclosure

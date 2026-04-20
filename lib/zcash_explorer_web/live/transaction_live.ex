@@ -145,7 +145,7 @@ defmodule ZcashExplorerWeb.TransactionLive do
                     ) do
                       [
                         content_tag(:a, address,
-                          href: "/addresses/#{address}",
+                          href: "/address/#{address}",
                           class: "font-mono text-sm text-indigo-600 hover:underline break-all"
                         ),
                         content_tag(:span, "#{format_zec(amount)} ZEC", class: "font-medium")
@@ -174,7 +174,7 @@ defmodule ZcashExplorerWeb.TransactionLive do
                       [
                         if address do
                           content_tag(:a, address,
-                            href: "/addresses/#{address}",
+                            href: "/address/#{address}",
                             class: "font-mono text-sm text-indigo-600 hover:underline break-all"
                           )
                         else
