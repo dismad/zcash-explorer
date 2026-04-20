@@ -45,56 +45,48 @@ defmodule ZcashExplorerWeb.TransactionLive do
       </head>
       <body class="bg-gray-50 dark:bg-gray-900">
         <%= if @standalone do %>
-          <header>
-            <nav x-data="{ open: false }" class="shrink-0 bg-indigo-600 dark:bg-gray-800">
-              <div class="max-w-7xl mx-auto px-2 sm:px-4 lg:px-8">
-                <div class="relative flex items-center justify-between h-16">
-                  <!-- Logo -->
-                  <div class="flex items-center px-2 lg:px-0 xl:w-64">
-                    <a href="/">
-                      <div class="shrink-0">
-                        <img class="h-8 w-auto" src="/images/zcash-icon-white.svg" alt="Zcash Block Explorer">
-                      </div>
-                    </a>
-                    <a href="/">
-                      <%= if @zcash_network == "testnet" do %>
-                        <div class="shrink-0 px-1 text-white dark:text-white md:block lg:block xl:block 2xl:block hidden">Zcash Testnet Block Explorer</div>
-                      <% else %>
-                        <div class="shrink-0 px-1 text-white dark:text-white md:block lg:block xl:block 2xl:block hidden">Zcash Block Explorer</div>
-                      <% end %>
-                    </a>
-                  </div>
-                  <!-- Search -->
-                  <div class="flex-1 flex justify-center lg:justify-end">
-                    <div class="w-full px-2 lg:px-6">
-                      <form action="/search">
-                        <div class="relative text-gray-200 dark:text-slate-200 focus-within:text-gray-400 dark:focus-within:text-slate-800">
-                          <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-white/70" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 01-14 0 7 7 0 0114 0z" />
-                            </svg>
-                          </div>
-                          <input name="qs" type="search"
-                            class="block w-full pl-11 pr-4 py-2.5 bg-white/20 hover:bg-white/30 focus:bg-white focus:text-gray-900 placeholder:text-white/70 text-white rounded-3xl text-base focus:outline-none focus:ring-2 focus:ring-white/50 transition-all"
-                            placeholder="transaction / block / address">
-                        </div>
-                      </form>
-                    </div>
-                  </div>
-                  <!-- Desktop nav -->
-                  <div class="hidden lg:flex items-center gap-x-8 text-sm font-medium">
-                    <a href="/mempool" class="hover:text-white/80">Mempool</a>
-                    <a href="/blocks" class="hover:text-white/80">Blocks</a>
-                    <a href="/nodes" class="hover:text-white/80">Nodes</a>
-                    <a href="/broadcast" class="hover:text-white/80">Broadcast</a>
-                    <%= if @zcash_network != "testnet" do %>
-                      <a href="/vk" class="hover:text-white/80">Viewing Key</a>
-                    <% end %>
-                  </div>
-                </div>
-              </div>
-            </nav>
-          </header>
+          <header class="bg-indigo-600 text-white h-14 flex items-center">
+	  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
+	    <div class="flex items-center justify-between h-full">
+	      
+	      <!-- Logo + Title -->
+	      <div class="flex items-center gap-x-3 flex-shrink-0">
+		<a href="/" class="flex items-center">
+		  <img src="/images/zcash-icon-white.svg" class="h-8 w-8" alt="Zcash">
+		</a>
+		<a href="/" class="text-xl font-semibold tracking-tight">Zcash Block Explorer</a>
+	      </div>
+
+	      <!-- Search Bar -->
+	      <div class="flex-1 max-w-2xl mx-8 mt-4">
+		<form action="/search" class="relative">
+		  <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+		    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-white/70" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+		      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 01-14 0 7 7 0 0114 0z" />
+		    </svg>
+		  </div>
+		  <input 
+		    name="qs" 
+		    type="search"
+		    class="block w-full pl-11 pr-4 py-2.5 bg-white/20 hover:bg-white/30 focus:bg-white focus:text-gray-900 placeholder:text-white/70 text-white rounded-3xl text-base focus:outline-none focus:ring-2 focus:ring-white/50 transition-all"
+		    placeholder="transaction / block / address"
+		  >
+		</form>
+	      </div>
+
+	      <!-- Desktop Navigation -->
+	      <div class="hidden lg:flex items-center gap-x-8 text-sm font-medium flex-shrink-0">
+		<a href="/mempool" class="hover:text-white/80 transition-colors">Mempool</a>
+		<a href="/blocks" class="hover:text-white/80 transition-colors">Blocks</a>
+		<a href="/nodes" class="hover:text-white/80 transition-colors">Nodes</a>
+		<a href="/broadcast" class="hover:text-white/80 transition-colors">Broadcast</a>
+		<%= if @zcash_network != "testnet" do %>
+		  <a href="/vk" class="hover:text-white/80 transition-colors">Viewing Key</a>
+		<% end %>
+	      </div>
+	    </div>
+	  </div>
+	</header>
         <% end %>
 
         <div class="mx-auto px-4 py-8">
