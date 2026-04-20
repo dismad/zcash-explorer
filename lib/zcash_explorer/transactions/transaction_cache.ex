@@ -2,45 +2,56 @@ defmodule ZcashExplorer.Transactions.TransactionWarmer do
   use Cachex.Warmer
   require Logger
 
+  @doc """
+  Returns the interval for this warmer.
+  """
   def interval, do: :timer.seconds(15)
 
+  @doc """
+  Executes this cache warmer.
+  """
   def execute(_state) do
     case Zcashex.getblockcount() do
       {:ok, n} ->
         blocks =
           Enum.to_list((n - 20)..n)
-          |> Enum.map(fn height ->
-            {:ok, block} = Zcashex.getblock(height, 2)
+          |> Enum.map(fn x ->
+            {:ok, block} = Zcashex.getblock(x, 2)
             block
           end)
 
-        recent_txs =
-          blocks
-          |> Enum.sort_by(& &1["height"], :desc)
-          |> Enum.flat_map(& &1["tx"])
-          |> Enum.take(20)
-          |> Enum.map(fn tx_map ->
-            {:ok, full_tx} = Zcashex.getrawtransaction(tx_map["txid"], 1)
-            tx = Zcashex.Transaction.from_map(full_tx)
-
-            type = ZcashExplorerWeb.TransactionHelper.tx_type(tx)
-
-            %{
-              "txid" => tx.txid,
-              "block_height" => tx.height,
-              "time" => tx.time,
-              "tx_out_total" => ZcashExplorerWeb.Helpers.tx_out_total(tx),
-              "size" => tx.size,
-              "type" => type
-            }
-          end)
-
-        Logger.info("✅ TransactionWarmer: Saved #{length(recent_txs)} transactions with types")
-        {:ok, [{"transaction_cache", recent_txs}]}
+        blocks
+        |> Enum.sort(&(&1["height"] >= &2["height"]))
+        |> Enum.map(fn x -> x["tx"] end)
+        |> List.flatten()
+        |> Enum.take(20)
+        |> Enum.map(fn y ->
+          {:ok, tx} = Zcashex.getrawtransaction(y["txid"], 1)
+          Zcashex.Transaction.from_map(tx)
+        end)
+        |> Enum.map(fn z ->
+          %{
+            "txid"          => Map.get(z, :txid),
+            "block_height"  => Map.get(z, :height),
+            "time"          => ZcashExplorerWeb.Helpers.mined_time(Map.get(z, :time)),
+            "tx_out_total"  => ZcashExplorerWeb.Helpers.tx_out_total(z),
+            "size"          => Map.get(z, :size),
+            "type"          => ZcashExplorerWeb.TransactionHelper.tx_type(z)   # ← New robust helper
+          }
+        end)
+        |> handle_result
 
       {:error, reason} ->
-        Logger.error("TransactionWarmer failed: #{inspect(reason)}")
-        :ignore
+        {:error, reason} |> handle_result
     end
+  end
+
+  defp handle_result({:error, reason}) do
+    Logger.error("Error while warming the transaction cache. #{inspect(reason)}")
+    :ignore
+  end
+
+  defp handle_result(info) do
+    {:ok, [{"transaction_cache", info}]}
   end
 end

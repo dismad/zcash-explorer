@@ -1,6 +1,6 @@
 defmodule ZcashExplorerWeb.TransactionLive do
   use Phoenix.LiveView, layout: false
-  import ZcashExplorerWeb.TransactionHelper
+  import ZcashExplorerWeb.TransactionHelper   # <-- new simplified helper
 
   @impl true
   def mount(%{"txid" => txid}, session, socket) do
@@ -10,7 +10,7 @@ defmodule ZcashExplorerWeb.TransactionLive do
     case Zcashex.getrawtransaction(txid, 1) do
       {:ok, tx_map} ->
         tx = Zcashex.Transaction.from_map(tx_map)
-        full_cache = fetch_prev_txs(tx)
+        full_cache = fetch_prev_txs(tx)   # needed for accurate public transaction fees
 
         {:ok, assign(socket,
           tx: tx,
@@ -19,6 +19,7 @@ defmodule ZcashExplorerWeb.TransactionLive do
           standalone: standalone,
           full_cache: full_cache
         )}
+
       _ ->
         {:ok, assign(socket,
           tx: nil,
@@ -44,54 +45,63 @@ defmodule ZcashExplorerWeb.TransactionLive do
       </head>
       <body class="bg-gray-50 dark:bg-gray-900">
         <%= if @standalone do %>
-          <header class="bg-indigo-600 text-white h-14 flex items-center">
-	  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
-	    <div class="flex items-center justify-between h-full">
-	      
-	      <!-- Logo + Title -->
-	      <div class="flex items-center gap-x-3 flex-shrink-0">
-		<a href="/" class="flex items-center">
-		  <img src="/images/zcash-icon-white.svg" class="h-8 w-8" alt="Zcash">
-		</a>
-		<a href="/" class="text-xl font-semibold tracking-tight">Zcash Block Explorer</a>
-	      </div>
-
-	      <!-- Search Bar -->
-	      <div class="flex-1 max-w-2xl mx-8 mt-4">
-		<form action="/search" class="relative">
-		  <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-		    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-white/70" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-		      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 01-14 0 7 7 0 0114 0z" />
-		    </svg>
-		  </div>
-		  <input 
-		    name="qs" 
-		    type="search"
-		    class="block w-full pl-11 pr-4 py-2.5 bg-white/20 hover:bg-white/30 focus:bg-white focus:text-gray-900 placeholder:text-white/70 text-white rounded-3xl text-base focus:outline-none focus:ring-2 focus:ring-white/50 transition-all"
-		    placeholder="transaction / block / address"
-		  >
-		</form>
-	      </div>
-
-	      <!-- Desktop Navigation -->
-	      <div class="hidden lg:flex items-center gap-x-8 text-sm font-medium flex-shrink-0">
-		<a href="/mempool" class="hover:text-white/80 transition-colors">Mempool</a>
-		<a href="/blocks" class="hover:text-white/80 transition-colors">Blocks</a>
-		<a href="/nodes" class="hover:text-white/80 transition-colors">Nodes</a>
-		<a href="/broadcast" class="hover:text-white/80 transition-colors">Broadcast</a>
-		<%= if @zcash_network != "testnet" do %>
-		  <a href="/vk" class="hover:text-white/80 transition-colors">Viewing Key</a>
-		<% end %>
-	      </div>
-	    </div>
-	  </div>
-	</header>
+          <header>
+            <nav x-data="{ open: false }" class="shrink-0 bg-indigo-600 dark:bg-gray-800">
+              <div class="max-w-7xl mx-auto px-2 sm:px-4 lg:px-8">
+                <div class="relative flex items-center justify-between h-16">
+                  <!-- Logo -->
+                  <div class="flex items-center px-2 lg:px-0 xl:w-64">
+                    <a href="/">
+                      <div class="shrink-0">
+                        <img class="h-8 w-auto" src="/images/zcash-icon-white.svg" alt="Zcash Block Explorer">
+                      </div>
+                    </a>
+                    <a href="/">
+                      <%= if @zcash_network == "testnet" do %>
+                        <div class="shrink-0 px-1 text-white dark:text-white md:block lg:block xl:block 2xl:block hidden">Zcash Testnet Block Explorer</div>
+                      <% else %>
+                        <div class="shrink-0 px-1 text-white dark:text-white md:block lg:block xl:block 2xl:block hidden">Zcash Block Explorer</div>
+                      <% end %>
+                    </a>
+                  </div>
+                  <!-- Search -->
+                  <div class="flex-1 flex justify-center lg:justify-end">
+                    <div class="w-full px-2 lg:px-6">
+                      <form action="/search">
+                        <div class="relative text-gray-200 dark:text-slate-200 focus-within:text-gray-400 dark:focus-within:text-slate-800">
+                          <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-white/70" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 01-14 0 7 7 0 0114 0z" />
+                            </svg>
+                          </div>
+                          <input name="qs" type="search"
+                            class="block w-full pl-11 pr-4 py-2.5 bg-white/20 hover:bg-white/30 focus:bg-white focus:text-gray-900 placeholder:text-white/70 text-white rounded-3xl text-base focus:outline-none focus:ring-2 focus:ring-white/50 transition-all"
+                            placeholder="transaction / block / address">
+                        </div>
+                      </form>
+                    </div>
+                  </div>
+                  <!-- Desktop nav -->
+                  <div class="hidden lg:flex items-center gap-x-8 text-sm font-medium">
+                    <a href="/mempool" class="hover:text-white/80">Mempool</a>
+                    <a href="/blocks" class="hover:text-white/80">Blocks</a>
+                    <a href="/nodes" class="hover:text-white/80">Nodes</a>
+                    <a href="/broadcast" class="hover:text-white/80">Broadcast</a>
+                    <%= if @zcash_network != "testnet" do %>
+                      <a href="/vk" class="hover:text-white/80">Viewing Key</a>
+                    <% end %>
+                  </div>
+                </div>
+              </div>
+            </nav>
+          </header>
         <% end %>
 
         <div class="mx-auto px-4 py-8">
           <h1 class="text-2xl font-semibold mb-6">Transaction <%= @txid %></h1>
 
           <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <!-- Stats -->
             <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
               <dl class="space-y-4">
                 <div class="flex justify-between"><dt class="text-gray-500">Confirmations</dt><dd class="font-semibold"><%= @tx && @tx.confirmations || 0 %></dd></div>
@@ -101,6 +111,7 @@ defmodule ZcashExplorerWeb.TransactionLive do
               </dl>
             </div>
 
+            <!-- More stats -->
             <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
               <dl class="space-y-4">
                 <div class="flex justify-between"><dt class="text-gray-500">Public Inputs / Outputs</dt><dd><%= length(@tx && @tx.vin || []) %> / <%= length(@tx && @tx.vout || []) %></dd></div>
@@ -109,20 +120,10 @@ defmodule ZcashExplorerWeb.TransactionLive do
               </dl>
             </div>
 
+            <!-- TX Type -->
             <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-6 flex items-center gap-3">
               <span class="text-gray-500">Type</span>
-              <%= case tx_type(@tx) do %>
-                <% "coinbase" -> %> <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-yellow-400 text-gray-900">💰 Coinbase</span>
-                <% "shielded" -> %> <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-200 text-gray-900">🛡 Shielded</span>
-                <% "sapling" -> %> <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-emerald-200 text-gray-900">🛡️ Sapling</span>
-                <% "sprout" -> %> <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-amber-200 text-gray-900">🌱 Sprout</span>
-                <% "transparent" -> %> <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-red-200 text-gray-900">🔍 Public</span>
-                <% "shielding" -> %> <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-red-50 text-gray-900">Shielding (T-Z)</span>
-                <% "deshielding" -> %> <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-red-50 text-gray-900">Deshielding (Z-T)</span>
-                <% "mixed" -> %> <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-gray-200 text-gray-900">Mixed</span>
-                <% "orchard" -> %> <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-purple-200 text-gray-900">🌳 Orchard</span>
-                <% _ -> %> <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-gray-200 text-gray-900">Unknown</span>
-              <% end %>
+              <%= tx_type(@tx) %>
             </div>
           </div>
 
@@ -166,7 +167,7 @@ defmodule ZcashExplorerWeb.TransactionLive do
   end
 
   # ==================================================================
-  # Accurate fee calculation (now safe for all Zebra data)
+  # Accurate fee calculation (kept from previous working version)
   # ==================================================================
   defp tx_fee(nil, _), do: 0.0
   defp tx_fee(tx, full_cache) do
@@ -193,7 +194,6 @@ defmodule ZcashExplorerWeb.TransactionLive do
     end)
   end
 
-  # Safe lookup for input value (works whether vin has valueZat, valueSat, or needs prev tx lookup)
   defp get_input_value(vin, full_cache) do
     cond do
       Map.get(vin, :valueZat) != nil -> Map.get(vin, :valueZat)
@@ -233,7 +233,6 @@ defmodule ZcashExplorerWeb.TransactionLive do
     Map.get(item, :valueZat) || Map.get(item, :valueSat) || round((Map.get(item, :value) || 0) * 100_000_000) || 0
   end
 
-  # Prefetch previous transactions for vin lookups
   defp fetch_prev_txs(tx) do
     txids = Enum.map(tx.vin || [], & &1.txid) |> Enum.reject(&is_nil/1) |> Enum.uniq()
 
@@ -247,7 +246,7 @@ defmodule ZcashExplorerWeb.TransactionLive do
     end)
   end
 
-  # Existing helpers
+  # Existing small helpers
   defp first_address(vout) do
     case vout && vout.scriptPubKey && vout.scriptPubKey.addresses do
       addresses when is_list(addresses) and length(addresses) > 0 -> hd(addresses)

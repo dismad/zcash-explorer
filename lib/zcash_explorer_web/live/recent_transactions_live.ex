@@ -1,5 +1,7 @@
 defmodule ZcashExplorerWeb.RecentTransactionsLive do
   use Phoenix.LiveView, layout: false
+  import Phoenix.HTML          # ← This fixes the "raw/1" error
+  import ZcashExplorerWeb.TransactionHelper
 
   @impl true
   def mount(_params, session, socket) do
@@ -58,52 +60,55 @@ defmodule ZcashExplorerWeb.RecentTransactionsLive do
       </head>
       <body class="bg-gray-50 dark:bg-gray-900">
         <%= if @standalone do %>
-          <!-- Full header only when visiting /index/recent_transactions directly -->
-          <header class="bg-indigo-600 text-white h-14 flex items-center">
-	  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
-	    <div class="flex items-center justify-between h-full">
-	      
-	      <!-- Logo + Title -->
-	      <div class="flex items-center gap-x-3 flex-shrink-0">
-		<a href="/" class="flex items-center">
-		  <img src="/images/zcash-icon-white.svg" class="h-8 w-8" alt="Zcash">
-		</a>
-		<a href="/" class="text-xl font-semibold tracking-tight">Zcash Block Explorer</a>
-	      </div>
-
-	      <!-- Search Bar -->
-	      <div class="flex-1 max-w-2xl mx-8 mt-4">
-		<form action="/search" class="relative">
-		  <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-		    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-white/70" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-		      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 01-14 0 7 7 0 0114 0z" />
-		    </svg>
-		  </div>
-		  <input 
-		    name="qs" 
-		    type="search"
-		    class="block w-full pl-11 pr-4 py-2.5 bg-white/20 hover:bg-white/30 focus:bg-white focus:text-gray-900 placeholder:text-white/70 text-white rounded-3xl text-base focus:outline-none focus:ring-2 focus:ring-white/50 transition-all"
-		    placeholder="transaction / block / address"
-		  >
-		</form>
-	      </div>
-
-	      <!-- Desktop Navigation -->
-	      <div class="hidden lg:flex items-center gap-x-8 text-sm font-medium flex-shrink-0">
-		<a href="/mempool" class="hover:text-white/80 transition-colors">Mempool</a>
-		<a href="/blocks" class="hover:text-white/80 transition-colors">Blocks</a>
-		<a href="/nodes" class="hover:text-white/80 transition-colors">Nodes</a>
-		<a href="/broadcast" class="hover:text-white/80 transition-colors">Broadcast</a>
-		<%= if @zcash_network != "testnet" do %>
-		  <a href="/vk" class="hover:text-white/80 transition-colors">Viewing Key</a>
-		<% end %>
-	      </div>
-	    </div>
-	  </div>
-	</header>
+          <header>
+            <nav x-data="{ open: false }" class="shrink-0 bg-indigo-600 dark:bg-gray-800">
+              <div class="max-w-7xl mx-auto px-2 sm:px-4 lg:px-8">
+                <div class="relative flex items-center justify-between h-16">
+                  <div class="flex items-center px-2 lg:px-0 xl:w-64">
+                    <a href="/">
+                      <div class="shrink-0">
+                        <img class="h-8 w-auto" src="/images/zcash-icon-white.svg" alt="Zcash Block Explorer">
+                      </div>
+                    </a>
+                    <a href="/">
+                      <%= if @zcash_network == "testnet" do %>
+                        <div class="shrink-0 px-1 text-white dark:text-white md:block lg:block xl:block 2xl:block hidden">Zcash Testnet Block Explorer</div>
+                      <% else %>
+                        <div class="shrink-0 px-1 text-white dark:text-white md:block lg:block xl:block 2xl:block hidden">Zcash Block Explorer</div>
+                      <% end %>
+                    </a>
+                  </div>
+                  <div class="flex-1 flex justify-center lg:justify-end">
+                    <div class="w-full px-2 lg:px-6">
+                      <form action="/search">
+                        <div class="relative text-gray-200 dark:text-slate-200 focus-within:text-gray-400 dark:focus-within:text-slate-800">
+                          <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-white/70" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 01-14 0 7 7 0 0114 0z" />
+                            </svg>
+                          </div>
+                          <input name="qs" type="search"
+                            class="block w-full pl-11 pr-4 py-2.5 bg-white/20 hover:bg-white/30 focus:bg-white focus:text-gray-900 placeholder:text-white/70 text-white rounded-3xl text-base focus:outline-none focus:ring-2 focus:ring-white/50 transition-all"
+                            placeholder="transaction / block / address">
+                        </div>
+                      </form>
+                    </div>
+                  </div>
+                  <div class="hidden lg:flex items-center gap-x-8 text-sm font-medium">
+                    <a href="/mempool" class="hover:text-white/80">Mempool</a>
+                    <a href="/blocks" class="hover:text-white/80">Blocks</a>
+                    <a href="/nodes" class="hover:text-white/80">Nodes</a>
+                    <a href="/broadcast" class="hover:text-white/80">Broadcast</a>
+                    <%= if @zcash_network != "testnet" do %>
+                      <a href="/vk" class="hover:text-white/80">Viewing Key</a>
+                    <% end %>
+                  </div>
+                </div>
+              </div>
+            </nav>
+          </header>
         <% end %>
 
-        <!-- Table -->
         <div class="w-full">
           <div class="shadow overflow-hidden border-gray-200 rounded-lg overflow-x-auto">
             <table class="w-full text-sm text-left text-gray-500 dark:text-gray-400">
@@ -112,11 +117,7 @@ defmodule ZcashExplorerWeb.RecentTransactionsLive do
                   <th scope="col" class="px-6 py-3">Transaction ID</th>
                   <th scope="col" class="px-6 py-3">Block#</th>
                   <th scope="col" class="px-6 py-3">Time (UTC)</th>
-                  <th scope="col" class="px-6 py-3">
-                    Public Output (
-                    <%= if @chain == "main", do: "ZEC", else: "TAZ" %>
-                    )
-                  </th>
+                  <th scope="col" class="px-6 py-3">Public Output (<%= if @chain == "main", do: "ZEC", else: "TAZ" %>)</th>
                   <th scope="col" class="px-4 py-3">TX Type</th>
                 </tr>
               </thead>
@@ -132,17 +133,10 @@ defmodule ZcashExplorerWeb.RecentTransactionsLive do
                     <td class="px-6 py-4 whitespace-nowrap text-sm font-medium"><%= tx["time"] %></td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm font-medium"><%= tx["tx_out_total"] %> ZEC</td>
                     <td class="px-4 py-4 whitespace-nowrap">
-                      <%= case tx["type"] do %>
-                        <% "coinbase" -> %> <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-400 text-gray-900 capitalize">💰 Coinbase</span>
-                        <% "shielded" -> %> <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-200 text-gray-900 capitalize">🛡 Shielded</span>
-                        <% "sapling" -> %> <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-200 text-gray-900 capitalize">🛡️ Sapling</span>
-                        <% "sprout" -> %> <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-200 text-gray-900 capitalize">🌱 Sprout</span>
-                        <% "transparent" -> %> <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-200 text-gray-900 capitalize">🔍 Public</span>
-                        <% "shielding" -> %> <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-50 text-gray-900 capitalize">Shielding (T-Z)</span>
-                        <% "deshielding" -> %> <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-50 text-gray-900 capitalize">Deshielding (Z-T)</span>
-                        <% "mixed" -> %> <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-200 text-gray-900 capitalize">Mixed</span>
-                        <% "orchard" -> %> <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-200 text-gray-900 capitalize">🌳 Orchard</span>
-                        <% _ -> %> <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-200 text-gray-900">Unknown</span>
+                      <%= if match?({:safe, _}, tx["type"]) do %>
+                        <%= raw(elem(tx["type"], 1)) %>
+                      <% else %>
+                        <%= tx_type(tx) %>
                       <% end %>
                     </td>
                   </tr>

@@ -24,17 +24,17 @@ defmodule ZcashExplorerWeb.BlockLive do
           %{}
         end
 
-        # 2. Collect all previous txids referenced by vins (like Rust code)
+        # 2. Collect all previous txids referenced by vins
         prev_txids = collect_prev_txids(block_txs)
 
         # 3. Fetch missing previous transactions
         prev_txs = prev_txids
-                   |> Enum.reduce(%{}, fn txid, acc ->
-                     case Zcashex.getrawtransaction(txid, 1) do
-                       {:ok, full_map} -> Map.put(acc, txid, full_map)
-                       _ -> acc
-                     end
-                   end)
+          |> Enum.reduce(%{}, fn txid, acc ->
+            case Zcashex.getrawtransaction(txid, 1) do
+              {:ok, full_map} -> Map.put(acc, txid, full_map)
+              _ -> acc
+            end
+          end)
 
         full_cache = Map.merge(block_txs, prev_txs)
 
@@ -72,51 +72,46 @@ defmodule ZcashExplorerWeb.BlockLive do
       <body class="bg-gray-50 dark:bg-gray-900">
         <%= if @standalone do %>
           <header class="bg-indigo-600 text-white h-14 flex items-center">
-	  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
-	    <div class="flex items-center justify-between h-full">
-	      
-	      <!-- Logo + Title -->
-	      <div class="flex items-center gap-x-3 flex-shrink-0">
-		<a href="/" class="flex items-center">
-		  <img src="/images/zcash-icon-white.svg" class="h-8 w-8" alt="Zcash">
-		</a>
-		<a href="/" class="text-xl font-semibold tracking-tight">Zcash Block Explorer</a>
-	      </div>
-
-	      <!-- Search Bar -->
-	      <div class="flex-1 max-w-2xl mx-8 mt-4">
-		<form action="/search" class="relative">
-		  <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-		    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-white/70" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-		      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 01-14 0 7 7 0 0114 0z" />
-		    </svg>
-		  </div>
-		  <input 
-		    name="qs" 
-		    type="search"
-		    class="block w-full pl-11 pr-4 py-2.5 bg-white/20 hover:bg-white/30 focus:bg-white focus:text-gray-900 placeholder:text-white/70 text-white rounded-3xl text-base focus:outline-none focus:ring-2 focus:ring-white/50 transition-all"
-		    placeholder="transaction / block / address"
-		  >
-		</form>
-	      </div>
-
-	      <!-- Desktop Navigation -->
-	      <div class="hidden lg:flex items-center gap-x-8 text-sm font-medium flex-shrink-0">
-		<a href="/mempool" class="hover:text-white/80 transition-colors">Mempool</a>
-		<a href="/blocks" class="hover:text-white/80 transition-colors">Blocks</a>
-		<a href="/nodes" class="hover:text-white/80 transition-colors">Nodes</a>
-		<a href="/broadcast" class="hover:text-white/80 transition-colors">Broadcast</a>
-		<%= if @zcash_network != "testnet" do %>
-		  <a href="/vk" class="hover:text-white/80 transition-colors">Viewing Key</a>
-		<% end %>
-	      </div>
-	    </div>
-	  </div>
-	</header>
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
+              <div class="flex items-center justify-between h-full">
+                <!-- Logo + Title -->
+                <div class="flex items-center gap-x-3 flex-shrink-0">
+                  <a href="/" class="flex items-center">
+                    <img src="/images/zcash-icon-white.svg" class="h-8 w-8" alt="Zcash">
+                  </a>
+                  <a href="/" class="text-xl font-semibold tracking-tight">Zcash Block Explorer</a>
+                </div>
+                <!-- Search Bar -->
+                <div class="flex-1 max-w-2xl mx-8 mt-4">
+                  <form action="/search" class="relative">
+                    <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                      <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-white/70" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 01-14 0 7 7 0 0114 0z" />
+                      </svg>
+                    </div>
+                    <input name="qs" type="search"
+                      class="block w-full pl-11 pr-4 py-2.5 bg-white/20 hover:bg-white/30 focus:bg-white focus:text-gray-900 placeholder:text-white/70 text-white rounded-3xl text-base focus:outline-none focus:ring-2 focus:ring-white/50 transition-all"
+                      placeholder="transaction / block / address">
+                  </form>
+                </div>
+                <!-- Desktop Navigation -->
+                <div class="hidden lg:flex items-center gap-x-8 text-sm font-medium flex-shrink-0">
+                  <a href="/mempool" class="hover:text-white/80 transition-colors">Mempool</a>
+                  <a href="/blocks" class="hover:text-white/80 transition-colors">Blocks</a>
+                  <a href="/nodes" class="hover:text-white/80 transition-colors">Nodes</a>
+                  <a href="/broadcast" class="hover:text-white/80 transition-colors">Broadcast</a>
+                  <%= if @zcash_network != "testnet" do %>
+                    <a href="/vk" class="hover:text-white/80 transition-colors">Viewing Key</a>
+                  <% end %>
+                </div>
+              </div>
+            </div>
+          </header>
         <% end %>
 
         <div class="mx-auto px-4 py-8">
           <h1 class="text-2xl font-semibold mb-6">Details for the Zcash block #<%= @block && @block.height %></h1>
+
           <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
             <!-- Left column - Main info -->
             <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
@@ -159,6 +154,7 @@ defmodule ZcashExplorerWeb.BlockLive do
                 </div>
               </dl>
             </div>
+
             <!-- Right column - Technical Details -->
             <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
               <h3 class="font-semibold mb-4">Technical Details</h3>
@@ -202,14 +198,7 @@ defmodule ZcashExplorerWeb.BlockLive do
                     <td class="px-6 py-4 text-right font-medium"><%= format_zec(tx_output_total(tx)) %></td>
                     <td class="px-6 py-4 text-right font-medium"><%= format_zec(tx_fee(tx, @full_cache)) %></td>
                     <td class="px-6 py-4">
-                      <%= case tx_type(tx) do %>
-                        <% "coinbase" -> %> <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-yellow-400 text-gray-900">💰 Coinbase</span>
-                        <% "shielding" -> %> <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-red-50 text-gray-900">Shielding (T-Z)</span>
-                        <% "deshielding" -> %> <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-red-50 text-gray-900">Deshielding (Z-T)</span>
-                        <% "orchard" -> %> <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-purple-200 text-gray-900">🌳 Orchard</span>
-                        <% "transparent" -> %> <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-red-200 text-gray-900">🔍 Public</span>
-                        <% _ -> %> <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gray-200 text-gray-900">Unknown</span>
-                      <% end %>
+                      <%= tx_type(tx) %>
                     </td>
                   </tr>
                 <% end %>
@@ -222,7 +211,7 @@ defmodule ZcashExplorerWeb.BlockLive do
     """
   end
 
-  # Helpers
+  # All your original helpers stay exactly the same
   defp tx_link(tx), do: "/transactions/#{tx.txid}"
 
   defp miner_address(nil), do: "Unknown"
@@ -257,7 +246,6 @@ defmodule ZcashExplorerWeb.BlockLive do
     end)
   end
 
-  # Exact match to your Rust calculate_fee_from_tx
   defp tx_fee(nil, _full_cache), do: 0.0
   defp tx_fee(tx, full_cache) do
     full = Map.get(full_cache, tx.txid)
@@ -270,7 +258,6 @@ defmodule ZcashExplorerWeb.BlockLive do
       vpub_new = calculate_vpub_new(full)
       sapling = full["valueBalanceZat"] || 0
       orchard = get_in(full, ["orchard", "valueBalanceZat"]) || 0
-
       fee_zats = vin_sum - vout_sum - vpub_old + vpub_new + sapling + orchard
       fee_zats / 100_000_000.0
     end
@@ -283,7 +270,6 @@ defmodule ZcashExplorerWeb.BlockLive do
     end)
   end
 
-  # Collect all prev txids referenced by vins (Rust-style missing_txids)
   defp collect_prev_txids(block_txs) do
     block_txs
     |> Map.values()
@@ -295,7 +281,6 @@ defmodule ZcashExplorerWeb.BlockLive do
     |> Enum.uniq()
   end
 
-  # Safe vin sum
   defp calculate_vin_sum(full_tx, full_cache) do
     Enum.reduce(full_tx["vin"] || [], 0, fn vin, acc ->
       case {vin["txid"], vin["vout"]} do
@@ -326,7 +311,6 @@ defmodule ZcashExplorerWeb.BlockLive do
     end)
   end
 
-  # Safe Zats extraction (matches Rust)
   defp safe_zats(nil), do: 0
   defp safe_zats(vout) when is_map(vout) do
     vout["valueZat"] || (vout["value"] && round(vout["value"] * 100_000_000)) || 0

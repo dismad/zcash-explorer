@@ -1,5 +1,7 @@
 defmodule ZcashExplorerWeb.RawMempoolLive do
   use Phoenix.LiveView, layout: false
+  import Phoenix.HTML
+  import ZcashExplorerWeb.TransactionHelper
 
   @impl true
   def mount(_params, session, socket) do
@@ -15,6 +17,7 @@ defmodule ZcashExplorerWeb.RawMempoolLive do
           zcash_network: network,
           standalone: standalone
         )}
+
       _ ->
         {:ok, assign(socket,
           raw_mempool: [],
@@ -44,7 +47,6 @@ defmodule ZcashExplorerWeb.RawMempoolLive do
         <link rel="stylesheet" href="/css/app.css">
       </head>
       <body class="bg-gray-50 dark:bg-gray-900">
-        <!-- Header only on standalone /mempool page -->
         <%= if @standalone do %>
           <header class="bg-indigo-600 text-white h-14 flex items-center">
 	  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
@@ -90,7 +92,6 @@ defmodule ZcashExplorerWeb.RawMempoolLive do
 	</header>
         <% end %>
 
-        <!-- Table -->
         <div class="w-full">
           <div class="shadow overflow-hidden border-gray-200 rounded-lg overflow-x-auto">
             <table class="w-full text-sm text-left text-gray-500 dark:text-gray-400">
@@ -99,34 +100,34 @@ defmodule ZcashExplorerWeb.RawMempoolLive do
                   <th scope="col" class="px-6 py-3">Tx ID</th>
                   <th scope="col" class="px-4 py-3">Block</th>
                   <th scope="col" class="px-4 py-3">Time</th>
-                  <th scope="col" class="px-4 py-3">Fee</th>
+                  <th scope="col" class="px-4 py-3">Fee (ZEC)</th>
                   <th scope="col" class="px-4 py-3">Size</th>
                   <th scope="col" class="px-4 py-3">TX Type</th>
                 </tr>
               </thead>
               <tbody class="bg-white divide-y divide-gray-200 dark:bg-gray-800 dark:divide-gray-700">
                 <%= for tx <- @raw_mempool do %>
-                  <tr class="hover:bg-gray-50 dark:hover:bg-gray-600">
+                  <tr class="bg-white border-b dark:bg-gray-800 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600">
                     <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-indigo-600 hover:text-indigo-500 dark:text-white">
                       <a href={"/transactions/#{tx["txid"]}"}><%= tx["txid"] %></a>
                     </td>
-                    <td class="px-4 py-4 whitespace-nowrap text-sm font-medium"><%= tx["info"]["height"] %></td>
-                    <td class="px-4 py-4 whitespace-nowrap text-sm font-medium"><%= mined_time_rel(tx["info"]["time"]) %></td>
-                    <!-- Correct fee: use the pre-computed fee from Zebra -->
-                    <td class="px-4 py-4 whitespace-nowrap text-sm font-medium"><%= format_zec(tx["info"]["fee"]) %> ZEC</td>
-                    <td class="px-4 py-4 whitespace-nowrap text-sm font-medium"><%= tx["info"]["size"] %></td>
+                    <td class="px-4 py-4 whitespace-nowrap text-sm font-medium">
+                      <%= tx["info"]["height"] %>
+                    </td>
+                    <td class="px-4 py-4 whitespace-nowrap text-sm font-medium">
+                      <%= mined_time_rel(tx["info"]["time"]) %>
+                    </td>
+                    <td class="px-4 py-4 whitespace-nowrap text-sm font-medium">
+                      <%= format_mempool_fee(tx["info"]["fee"]) %>
+                    </td>
+                    <td class="px-4 py-4 whitespace-nowrap text-sm font-medium">
+                      <%= tx["info"]["size"] %>
+                    </td>
                     <td class="px-4 py-4 whitespace-nowrap">
-                      <%= case tx["type"] do %>
-                        <% "coinbase" -> %> <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-400 text-gray-900 capitalize">💰 Coinbase</span>
-                        <% "shielded" -> %> <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-200 text-gray-900 capitalize">🛡 Shielded</span>
-                        <% "sapling" -> %> <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-200 text-gray-900 capitalize">🛡️ Sapling</span>
-                        <% "sprout" -> %> <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-200 text-gray-900 capitalize">🌱 Sprout</span>
-                        <% "transparent" -> %> <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-200 text-gray-900 capitalize">🔍 Public</span>
-                        <% "shielding" -> %> <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-50 text-gray-900 capitalize">Shielding (T-Z)</span>
-                        <% "deshielding" -> %> <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-50 text-gray-900 capitalize">Deshielding (Z-T)</span>
-                        <% "mixed" -> %> <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-200 text-gray-900 capitalize">Mixed</span>
-                        <% "orchard" -> %> <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-200 text-gray-900 capitalize">🌳 Orchard</span>
-                        <% _ -> %> <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-200 text-gray-900">Unknown</span>
+                      <%= if match?({:safe, _}, tx["type"]) do %>
+                        <%= raw(elem(tx["type"], 1)) %>
+                      <% else %>
+                        <%= tx_type(tx) %>
                       <% end %>
                     </td>
                   </tr>
@@ -140,17 +141,19 @@ defmodule ZcashExplorerWeb.RawMempoolLive do
     """
   end
 
-  # Your existing helpers
+  # ── Helpers ─────────────────────────────────────────────────────────────────────
+
   defp mined_time_rel(unix_timestamp) when is_integer(unix_timestamp) do
     Timex.from_unix(unix_timestamp) |> Timex.format!("{relative}", :relative)
   end
   defp mined_time_rel(_), do: "—"
 
-  defp format_zec(amount) when is_number(amount) do
+  # This is the correct formatter for mempool fees (already in ZEC)
+  defp format_mempool_fee(amount) when is_number(amount) do
     amount
     |> Decimal.from_float()
     |> Decimal.round(8)
     |> Decimal.to_string(:normal)
   end
-  defp format_zec(_), do: "—"
+  defp format_mempool_fee(_), do: "0.00000000"
 end

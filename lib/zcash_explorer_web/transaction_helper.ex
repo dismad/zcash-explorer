@@ -1,73 +1,74 @@
 defmodule ZcashExplorerWeb.TransactionHelper do
-  @moduledoc """
-  Accurate Zcash transaction type classification.
-  Shielding and deshielding have strict priority.
-  """
+  import Phoenix.HTML
 
   def tx_type(tx) when is_map(tx) do
-    calculate_type(tx)
-  end
-
-  defp calculate_type(tx) do
-    vin = get_field(tx, :vin) || get_field(tx, "vin") || []
-    vout = get_field(tx, :vout) || get_field(tx, "vout") || []
-    shielded_spend = get_field(tx, :vShieldedSpend) || get_field(tx, "vShieldedSpend") || []
-    shielded_output = get_field(tx, :vShieldedOutput) || get_field(tx, "vShieldedOutput") || []
-    joinsplit = get_field(tx, :vjoinsplit) || get_field(tx, "vjoinsplit") || []
-    orchard = get_field(tx, :orchard) || get_field(tx, "orchard") || %{}
-
-    cond do
-      # 1. Coinbase
-      is_coinbase?(vin) ->
-        "coinbase"
-
-      # 2. Shielding (T → Z)
-      length(vin) > 0 and length(shielded_output) > 0 ->
-        "shielding"
-
-      # 3. Deshielding (Z → T) - relaxed condition (vin can be > 0)
-      length(shielded_spend) > 0 and length(vout) > 0 ->
-        "deshielding"
-
-      # 4. Mixed
-      length(vin) > 0 and length(vout) > 0 and (length(shielded_spend) > 0 or length(shielded_output) > 0) ->
-        "mixed"
-
-      # 5. Fully shielded Sapling
-      length(shielded_spend) > 0 and length(shielded_output) > 0 and length(vin) == 0 and length(vout) == 0 ->
-        "sapling"
-
-      # 6. Sprout
-      length(joinsplit) > 0 ->
-        "sprout"
-
-      # 7. Pure Orchard
-      has_orchard_activity?(orchard) and length(shielded_spend) == 0 and length(shielded_output) == 0 ->
-        "orchard"
-
-      # 8. Regular transparent
-      length(vin) > 0 and length(vout) > 0 ->
-        "transparent"
-
-      true ->
-        "unknown"
+    pre_computed = Map.get(tx, "type") || Map.get(tx, :type)
+    if pre_computed && pre_computed != "unknown" do
+      badge(pre_computed)
+    else
+      badge(detect_type(tx))
     end
   end
 
-  defp has_orchard_activity?(orchard) when is_map(orchard) do
-    value = get_field(orchard, :valueBalance) || get_field(orchard, "valueBalance")
-    actions = get_field(orchard, :actions) || get_field(orchard, "actions")
-    (value != nil and value != 0) or (actions != nil and length(actions) > 0)
-  end
-  defp has_orchard_activity?(_), do: false
+  def tx_type(_), do: badge("unknown")
 
-  defp is_coinbase?(vin_list) when is_list(vin_list) and length(vin_list) > 0 do
-    first = hd(vin_list)
-    get_field(first, :coinbase) != nil or get_field(first, "coinbase") != nil
+  defp detect_type(tx) do
+    vin          = Map.get(tx, "vin") || Map.get(tx, :vin) || []
+    vout         = Map.get(tx, "vout") || Map.get(tx, :vout) || []
+    vjoinsplit   = Map.get(tx, "vjoinsplit") || Map.get(tx, :vjoinsplit) || []
+    orchard      = Map.get(tx, "orchard") || Map.get(tx, :orchard)
+    value_zat    = Map.get(tx, "valueBalanceZat") || Map.get(tx, :valueBalanceZat) || 0
+    orchard_zat  = get_orchard_zat(orchard)
+
+    is_coinbase = is_coinbase?(vin)
+    has_transparent_out = length(vout) > 0
+
+    cond do
+      is_coinbase                     -> "coinbase"
+      length(vjoinsplit) > 0          -> "sprout"
+      # True deshielding only if we actually send to transparent
+      (value_zat > 0 || orchard_zat > 0) && has_transparent_out -> "deshielding"
+      # True shielding
+      value_zat < 0 || orchard_zat < 0 -> "shielding"
+      has_orchard?(orchard)           -> "orchard"
+      has_sapling?(tx)                -> "sapling"
+      length(vin) > 0 && length(vout) > 0 -> "transparent"
+      true                            -> "mixed"
+    end
+  end
+
+  defp get_orchard_zat(nil), do: 0
+  defp get_orchard_zat(orchard) do
+    Map.get(orchard, "valueBalanceZat") || Map.get(orchard, :valueBalanceZat) || 0
+  end
+
+  defp is_coinbase?(vin) when is_list(vin) do
+    Enum.any?(vin, fn v -> Map.get(v, "coinbase") || Map.get(v, :coinbase) end)
   end
   defp is_coinbase?(_), do: false
 
-  defp get_field(data, key) when is_struct(data), do: Map.get(data, key)
-  defp get_field(data, key) when is_map(data), do: Map.get(data, key) || Map.get(data, to_string(key))
-  defp get_field(_, _), do: nil
+  defp has_orchard?(nil), do: false
+  defp has_orchard?(orchard) do
+    actions = Map.get(orchard, "actions") || Map.get(orchard, :actions)
+    is_list(actions) && length(actions) > 0
+  end
+
+  defp has_sapling?(tx) do
+    (Map.get(tx, "vShieldedSpend") || Map.get(tx, :vShieldedSpend) || []) != [] ||
+    (Map.get(tx, "vShieldedOutput") || Map.get(tx, :vShieldedOutput) || []) != []
+  end
+
+  defp badge(type) do
+    case type do
+      "coinbase"    -> raw ~S{<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-400 text-gray-900 capitalize">💰 Coinbase</span>}
+      "shielding"   -> raw ~S{<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-50 text-gray-900 capitalize">Shielding (T-Z)</span>}
+      "deshielding" -> raw ~S{<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-50 text-gray-900 capitalize">Deshielding (Z-T)</span>}
+      "orchard"     -> raw ~S{<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-200 text-gray-900 capitalize">🌳 Orchard</span>}
+      "sapling"     -> raw ~S{<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-200 text-gray-900 capitalize">🛡 Sapling</span>}
+      "sprout"      -> raw ~S{<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-200 text-gray-900 capitalize">🌱 Sprout</span>}
+      "transparent" -> raw ~S{<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-200 text-gray-900 capitalize">🔍 Public</span>}
+      "mixed"       -> raw ~S{<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-200 text-gray-900 capitalize">Mixed</span>}
+      _             -> raw ~S{<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-200 text-gray-900">Unknown</span>}
+    end
+  end
 end
