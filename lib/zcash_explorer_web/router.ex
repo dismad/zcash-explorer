@@ -25,9 +25,11 @@ defmodule ZcashExplorerWeb.Router do
     live "/transactions/:txid", TransactionLive
 
     live "/blockchain-info", BlockChainInfoLive
-    live "/mempool", RawMempoolLive          # ← fixed: was MempoolLive
+    # ← fixed: was MempoolLive
+    live "/mempool", RawMempoolLive
     live "/nodes", NodesLive
-    live "/broadcast", BroadcastLive         # ← you may need to create this later
+    # ← you may need to create this later
+    live "/broadcast", BroadcastLive
     live "/vk", VkLive
 
     # Metric / helper LiveViews (keep as-is)
@@ -67,8 +69,10 @@ defmodule ZcashExplorerWeb.Router do
   # LiveDashboard (development only)
   if Mix.env() in [:dev, :test] do
     import Phoenix.LiveDashboard.Router
+
     scope "/" do
       pipe_through :browser
+
       live_dashboard "/dashboard",
         metrics: ZcashExplorerWeb.Telemetry,
         ecto_repos: [ZcashExplorer.Repo]

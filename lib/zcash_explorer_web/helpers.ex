@@ -11,6 +11,7 @@ defmodule ZcashExplorerWeb.Helpers do
   def output_total(tx_list) when is_list(tx_list) do
     Enum.reduce(tx_list, 0, fn tx, acc ->
       vout = Map.get(tx, :vout) || Map.get(tx, "vout") || []
+
       Enum.reduce(vout, acc, fn vout_tx, sum ->
         value = Map.get(vout_tx, :value) || Map.get(vout_tx, "value") || 0
         sum + value
@@ -20,6 +21,7 @@ defmodule ZcashExplorerWeb.Helpers do
 
   def tx_out_total(tx) do
     vout = Map.get(tx, :vout) || Map.get(tx, "vout") || []
+
     Enum.reduce(vout, 0, fn vout_tx, sum ->
       value = Map.get(vout_tx, :value) || Map.get(vout_tx, "value") || 0
       sum + value
@@ -35,13 +37,11 @@ defmodule ZcashExplorerWeb.Helpers do
     |> Decimal.to_string()
   end
 
- def get_network(assigns) do
+  def get_network(assigns) do
     assigns[:zcash_network] || "mainnet"
   end
 
   def conn_or_socket(conn, socket) do
     conn || (socket && socket.assigns[:conn]) || %{}
   end
-
 end
-

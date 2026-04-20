@@ -7,7 +7,7 @@ defmodule ZcashExplorerWeb.Endpoint do
   @session_options [
     store: :cookie,
     key: "_zcash_explorer_key",
-    signing_salt: "vsjpf7KS"
+    signing_salt: "jw77JXVZmPzcQrA4mudyw+8HKzG0tG35"
   ]
 
   socket "/socket", ZcashExplorerWeb.UserSocket,
@@ -24,7 +24,7 @@ defmodule ZcashExplorerWeb.Endpoint do
     at: "/",
     from: :zcash_explorer,
     gzip: true,
-    only: ~w(css fonts images js favicon.ico robots.txt privacy.html)
+    only: ~w(assets css fonts images js favicon.ico robots.txt privacy.html)
 
   # Code reloading can be explicitly enabled under the
   # :code_reloader configuration of your endpoint.

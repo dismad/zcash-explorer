@@ -17,7 +17,10 @@ defmodule ZcashExplorer.Mempool.MempoolWarmer do
                   tx_type(tx)
 
                 {:error, reason} ->
-                  Logger.error("MempoolWarmer: Failed to fetch full tx #{txid}: #{inspect(reason)}")
+                  Logger.error(
+                    "MempoolWarmer: Failed to fetch full tx #{txid}: #{inspect(reason)}"
+                  )
+
                   "unknown"
               end
 
@@ -28,7 +31,10 @@ defmodule ZcashExplorer.Mempool.MempoolWarmer do
             }
           end)
 
-        Logger.info("✅ MempoolWarmer: Saved #{length(mempool_info)} transactions with correct types")
+        Logger.info(
+          "✅ MempoolWarmer: Saved #{length(mempool_info)} transactions with correct types"
+        )
+
         {:ok, [{"raw_mempool", mempool_info}]}
 
       {:error, reason} ->

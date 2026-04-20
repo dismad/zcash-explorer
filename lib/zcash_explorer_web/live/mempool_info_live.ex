@@ -10,17 +10,20 @@ defmodule ZcashExplorerWeb.MempoolInfoLive do
 
     case Cachex.get(:app_cache, "raw_mempool") do
       {:ok, info} ->
-        {:ok, assign(socket,
-          mempool_info: length(info),
-          zcash_network: network,
-          standalone: standalone
-        )}
+        {:ok,
+         assign(socket,
+           mempool_info: length(info),
+           zcash_network: network,
+           standalone: standalone
+         )}
+
       _ ->
-        {:ok, assign(socket,
-          mempool_info: 0,
-          zcash_network: network,
-          standalone: standalone
-        )}
+        {:ok,
+         assign(socket,
+           mempool_info: 0,
+           zcash_network: network,
+           standalone: standalone
+         )}
     end
   end
 
@@ -41,7 +44,7 @@ defmodule ZcashExplorerWeb.MempoolInfoLive do
         <meta http-equiv="X-UA-Compatible" content="IE=edge">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Mempool Info - Zcash Explorer</title>
-        <link rel="stylesheet" href="/css/app.css">
+        <link rel="stylesheet" href="/assets/app.css">
       </head>
       <body class="bg-gray-50 dark:bg-gray-900">
 

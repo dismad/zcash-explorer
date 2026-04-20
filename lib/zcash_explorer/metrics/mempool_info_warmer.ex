@@ -13,6 +13,4 @@ defmodule ZcashExplorer.Metrics.MempoolInfoWarmer do
   def execute(_state) do
     :ignore
   end
-
-  
 end

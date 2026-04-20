@@ -31,12 +31,13 @@ defmodule ZcashExplorer.Transactions.TransactionWarmer do
         end)
         |> Enum.map(fn z ->
           %{
-            "txid"          => Map.get(z, :txid),
-            "block_height"  => Map.get(z, :height),
-            "time"          => ZcashExplorerWeb.Helpers.mined_time(Map.get(z, :time)),
-            "tx_out_total"  => ZcashExplorerWeb.Helpers.tx_out_total(z),
-            "size"          => Map.get(z, :size),
-            "type"          => ZcashExplorerWeb.TransactionHelper.tx_type(z)   # ← New robust helper
+            "txid" => Map.get(z, :txid),
+            "block_height" => Map.get(z, :height),
+            "time" => ZcashExplorerWeb.Helpers.mined_time(Map.get(z, :time)),
+            "tx_out_total" => ZcashExplorerWeb.Helpers.tx_out_total(z),
+            "size" => Map.get(z, :size),
+            # ← New robust helper
+            "type" => ZcashExplorerWeb.TransactionHelper.tx_type(z)
           }
         end)
         |> handle_result

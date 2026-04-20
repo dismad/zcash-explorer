@@ -70,11 +70,13 @@ defmodule ZcashExplorerWeb.VkLive do
     |> Decimal.round(8)
     |> Decimal.to_string(:normal)
   end
+
   defp zatoshi_to_zec(_), do: "0.00000000"
 
   defp mined_time_rel(unix_timestamp) when is_integer(unix_timestamp) do
     Timex.from_unix(unix_timestamp) |> Timex.format!("{relative}", :relative)
   end
+
   defp mined_time_rel(_), do: "—"
 
   # ------------------------------------------------------------------
@@ -110,6 +112,7 @@ defmodule ZcashExplorerWeb.VkLive do
   @impl true
   def handle_info({:received_txs, txs}, socket) do
     Cachex.decr!(:app_cache, "nbjobs")
+
     {:noreply,
      assign(socket, :message, %{
        "message" => "Got list of txs",
@@ -121,6 +124,7 @@ defmodule ZcashExplorerWeb.VkLive do
   @impl true
   def terminate(reason, socket) do
     container_id = socket.assigns.message["container_id"]
+
     if disconnected?(reason) do
       Cachex.decr!(:app_cache, "nbjobs")
       MuonTrap.cmd("docker", ["stop", container_id])

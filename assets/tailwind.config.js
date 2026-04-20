@@ -1,14 +1,12 @@
+/** @type {import('tailwindcss').Config} */
 const colors = require('tailwindcss/colors')
 const defaultTheme = require('tailwindcss/defaultTheme')
 
 module.exports = {
   darkMode: 'class',
   content: [
-    '../lib/**/*.ex',
-    '../lib/**/*.leex',
-    '../lib/**/*.heex',
-    '../lib/**/*.eex',
-    './js/**/*.js'
+    './js/**/*.js',
+    '../lib/zcash_explorer_web/**/*.*ex'
   ],
   theme: {
     extend: {

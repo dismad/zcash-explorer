@@ -1,6 +1,5 @@
 defmodule ZcashExplorerWeb.TransactionLive do
   use Phoenix.LiveView, layout: false
-  import Phoenix.HTML
   import Phoenix.HTML.Tag
   import ZcashExplorerWeb.TransactionHelper
 
@@ -14,22 +13,24 @@ defmodule ZcashExplorerWeb.TransactionLive do
         tx = Zcashex.Transaction.from_map(tx_map)
         full_cache = fetch_prev_txs(tx)
 
-        {:ok, assign(socket,
-          tx: tx,
-          txid: txid,
-          zcash_network: network,
-          standalone: standalone,
-          full_cache: full_cache
-        )}
+        {:ok,
+         assign(socket,
+           tx: tx,
+           txid: txid,
+           zcash_network: network,
+           standalone: standalone,
+           full_cache: full_cache
+         )}
 
       _ ->
-        {:ok, assign(socket,
-          tx: nil,
-          txid: txid,
-          zcash_network: network,
-          standalone: standalone,
-          full_cache: %{}
-        )}
+        {:ok,
+         assign(socket,
+           tx: nil,
+           txid: txid,
+           zcash_network: network,
+           standalone: standalone,
+           full_cache: %{}
+         )}
     end
   end
 
@@ -43,7 +44,7 @@ defmodule ZcashExplorerWeb.TransactionLive do
         <meta http-equiv="X-UA-Compatible" content="IE=edge">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Transaction <%= @txid %> - Zcash Explorer</title>
-        <link rel="stylesheet" href="/css/app.css">
+        <link rel="stylesheet" href="/assets/app.css">
       </head>
       <body class="bg-gray-50 dark:bg-gray-900">
         <%= if @standalone do %>
@@ -125,20 +126,28 @@ defmodule ZcashExplorerWeb.TransactionLive do
     content_tag(:div, class: "mt-8 bg-white dark:bg-gray-800 shadow rounded-lg p-6") do
       [
         content_tag(:h2, "Public Transfers", class: "text-lg font-semibold mb-4"),
-
         content_tag(:div, class: "flex items-center gap-8") do
           [
             # INPUTS - now shows correct address + real previous output amount
             content_tag(:div, class: "flex-1") do
               [
-                content_tag(:div, "Inputs (#{length(assigns.tx && assigns.tx.vin || [])})", class: "text-sm text-gray-500 mb-3"),
+                content_tag(:div, "Inputs (#{length((assigns.tx && assigns.tx.vin) || [])})",
+                  class: "text-sm text-gray-500 mb-3"
+                ),
                 content_tag(:div, class: "space-y-2") do
-                  for vin <- assigns.tx && assigns.tx.vin || [] do
+                  for vin <- (assigns.tx && assigns.tx.vin) || [] do
                     address = get_input_address(vin, assigns.full_cache) || "—"
-                    amount  = get_input_value(vin, assigns.full_cache)
-                    content_tag(:div, class: "flex justify-between py-2 border-b last:border-0 bg-gray-50 dark:bg-gray-700 p-4 rounded border") do
+                    amount = get_input_value(vin, assigns.full_cache)
+
+                    content_tag(:div,
+                      class:
+                        "flex justify-between py-2 border-b last:border-0 bg-gray-50 dark:bg-gray-700 p-4 rounded border"
+                    ) do
                       [
-                        content_tag(:a, address, href: "/addresses/#{address}", class: "font-mono text-sm text-indigo-600 hover:underline break-all"),
+                        content_tag(:a, address,
+                          href: "/addresses/#{address}",
+                          class: "font-mono text-sm text-indigo-600 hover:underline break-all"
+                        ),
                         content_tag(:span, "#{format_zec(amount)} ZEC", class: "font-medium")
                       ]
                     end
@@ -146,24 +155,36 @@ defmodule ZcashExplorerWeb.TransactionLive do
                 end
               ]
             end,
-
             content_tag(:div, "→", class: "text-4xl text-gray-300"),
 
             # OUTPUTS
             content_tag(:div, class: "flex-1") do
               [
-                content_tag(:div, "Outputs (#{length(assigns.tx && assigns.tx.vout || [])})", class: "text-sm text-gray-500 mb-3"),
+                content_tag(:div, "Outputs (#{length((assigns.tx && assigns.tx.vout) || [])})",
+                  class: "text-sm text-gray-500 mb-3"
+                ),
                 content_tag(:div, class: "space-y-2") do
-                  for vout <- assigns.tx && assigns.tx.vout || [] do
+                  for vout <- (assigns.tx && assigns.tx.vout) || [] do
                     address = first_address(vout)
-                    content_tag(:div, class: "flex justify-between items-center py-2 border-b last:border-none bg-gray-50 dark:bg-gray-700 p-4 rounded border") do
+
+                    content_tag(:div,
+                      class:
+                        "flex justify-between items-center py-2 border-b last:border-none bg-gray-50 dark:bg-gray-700 p-4 rounded border"
+                    ) do
                       [
                         if address do
-                          content_tag(:a, address, href: "/addresses/#{address}", class: "font-mono text-sm text-indigo-600 hover:underline break-all")
+                          content_tag(:a, address,
+                            href: "/addresses/#{address}",
+                            class: "font-mono text-sm text-indigo-600 hover:underline break-all"
+                          )
                         else
-                          content_tag(:span, "No address", class: "font-mono text-sm text-gray-400")
+                          content_tag(:span, "No address",
+                            class: "font-mono text-sm text-gray-400"
+                          )
                         end,
-                        content_tag(:span, "#{format_zec(vout.value || 0)} ZEC", class: "font-medium")
+                        content_tag(:span, "#{format_zec(vout.value || 0)} ZEC",
+                          class: "font-medium"
+                        )
                       ]
                     end
                   end
@@ -179,16 +200,21 @@ defmodule ZcashExplorerWeb.TransactionLive do
   # ── NEW HELPER: resolves real input address from previous output ──
   defp get_input_address(vin, full_cache) do
     cond do
-      vin.address != nil -> vin.address
+      vin.address != nil ->
+        vin.address
+
       vin.txid && vin.vout != nil ->
         prev_tx = Map.get(full_cache, vin.txid)
+
         if prev_tx && prev_tx.vout && Enum.at(prev_tx.vout, vin.vout) do
           out = Enum.at(prev_tx.vout, vin.vout)
           List.first(out.scriptPubKey.addresses || [])
         else
           nil
         end
-      true -> nil
+
+      true ->
+        nil
     end
   end
 
@@ -196,6 +222,7 @@ defmodule ZcashExplorerWeb.TransactionLive do
   # Your original helpers (100% unchanged)
   # ==================================================================
   defp tx_fee(nil, _), do: 0.0
+
   defp tx_fee(tx, full_cache) do
     if is_coinbase?(tx) do
       0.0
@@ -205,7 +232,7 @@ defmodule ZcashExplorerWeb.TransactionLive do
       vpub_old = calculate_vpub_old(tx)
       vpub_new = calculate_vpub_new(tx)
       sapling = tx.valueBalanceZat || 0
-      orchard = tx.orchard && tx.orchard.valueBalanceZat || 0
+      orchard = (tx.orchard && tx.orchard.valueBalanceZat) || 0
       fee_zats = vin_sum - vout_sum - vpub_old + vpub_new + sapling + orchard
       fee_zats / 100_000_000.0
     end
@@ -221,18 +248,29 @@ defmodule ZcashExplorerWeb.TransactionLive do
 
   defp get_input_value(vin, full_cache) do
     cond do
-      Map.get(vin, :valueZat) != nil -> Map.get(vin, :valueZat)
-      Map.get(vin, :valueSat) != nil -> Map.get(vin, :valueSat)
-      Map.get(vin, :value) != nil -> round(Map.get(vin, :value) * 100_000_000)
+      Map.get(vin, :valueZat) != nil ->
+        Map.get(vin, :valueZat)
+
+      Map.get(vin, :valueSat) != nil ->
+        Map.get(vin, :valueSat)
+
+      Map.get(vin, :value) != nil ->
+        round(Map.get(vin, :value) * 100_000_000)
+
       vin.txid && vin.vout != nil ->
         prev_tx = Map.get(full_cache, vin.txid)
+
         if prev_tx && prev_tx.vout && Enum.at(prev_tx.vout, vin.vout) do
           out = Enum.at(prev_tx.vout, vin.vout)
-          Map.get(out, :valueZat) || Map.get(out, :valueSat) || round((Map.get(out, :value) || 0) * 100_000_000)
+
+          Map.get(out, :valueZat) || Map.get(out, :valueSat) ||
+            round((Map.get(out, :value) || 0) * 100_000_000)
         else
           0
         end
-      true -> 0
+
+      true ->
+        0
     end
   end
 
@@ -255,7 +293,8 @@ defmodule ZcashExplorerWeb.TransactionLive do
   end
 
   defp safe_zats(item) do
-    Map.get(item, :valueZat) || Map.get(item, :valueSat) || round((Map.get(item, :value) || 0) * 100_000_000) || 0
+    Map.get(item, :valueZat) || Map.get(item, :valueSat) ||
+      round((Map.get(item, :value) || 0) * 100_000_000) || 0
   end
 
   defp fetch_prev_txs(tx) do
@@ -267,7 +306,9 @@ defmodule ZcashExplorerWeb.TransactionLive do
       {:ok, {:ok, raw}}, acc ->
         prev_tx = Zcashex.Transaction.from_map(raw)
         Map.put(acc, prev_tx.txid, prev_tx)
-      _, acc -> acc
+
+      _, acc ->
+        acc
     end)
   end
 
@@ -279,11 +320,17 @@ defmodule ZcashExplorerWeb.TransactionLive do
   end
 
   defp format_zec(nil), do: "0.00000000"
+
   defp format_zec(amount) when is_integer(amount) do
-    amount / 100_000_000 |> Decimal.from_float() |> Decimal.round(8) |> Decimal.to_string(:normal)
+    (amount / 100_000_000)
+    |> Decimal.from_float()
+    |> Decimal.round(8)
+    |> Decimal.to_string(:normal)
   end
+
   defp format_zec(amount) when is_float(amount) or is_number(amount) do
     amount |> Decimal.from_float() |> Decimal.round(8) |> Decimal.to_string(:normal)
   end
+
   defp format_zec(_), do: "0.00000000"
 end

@@ -12,23 +12,25 @@ defmodule ZcashExplorerWeb.BlockLive do
         block = Zcashex.Block.from_map(block_map)
 
         # 1. Fetch full transactions in this block
-        block_txs = if block && block.tx do
-          block.tx
-          |> Enum.reduce(%{}, fn tx, acc ->
-            case Zcashex.getrawtransaction(tx.txid, 1) do
-              {:ok, full_map} -> Map.put(acc, tx.txid, full_map)
-              _ -> acc
-            end
-          end)
-        else
-          %{}
-        end
+        block_txs =
+          if block && block.tx do
+            block.tx
+            |> Enum.reduce(%{}, fn tx, acc ->
+              case Zcashex.getrawtransaction(tx.txid, 1) do
+                {:ok, full_map} -> Map.put(acc, tx.txid, full_map)
+                _ -> acc
+              end
+            end)
+          else
+            %{}
+          end
 
         # 2. Collect all previous txids referenced by vins
         prev_txids = collect_prev_txids(block_txs)
 
         # 3. Fetch missing previous transactions
-        prev_txs = prev_txids
+        prev_txs =
+          prev_txids
           |> Enum.reduce(%{}, fn txid, acc ->
             case Zcashex.getrawtransaction(txid, 1) do
               {:ok, full_map} -> Map.put(acc, txid, full_map)
@@ -38,22 +40,24 @@ defmodule ZcashExplorerWeb.BlockLive do
 
         full_cache = Map.merge(block_txs, prev_txs)
 
-        {:ok, assign(socket,
-          block: block,
-          hash: hash,
-          zcash_network: network,
-          standalone: standalone,
-          full_cache: full_cache
-        )}
+        {:ok,
+         assign(socket,
+           block: block,
+           hash: hash,
+           zcash_network: network,
+           standalone: standalone,
+           full_cache: full_cache
+         )}
 
       _ ->
-        {:ok, assign(socket,
-          block: nil,
-          hash: hash,
-          zcash_network: network,
-          standalone: standalone,
-          full_cache: %{}
-        )}
+        {:ok,
+         assign(socket,
+           block: nil,
+           hash: hash,
+           zcash_network: network,
+           standalone: standalone,
+           full_cache: %{}
+         )}
     end
   end
 
@@ -67,7 +71,7 @@ defmodule ZcashExplorerWeb.BlockLive do
         <meta http-equiv="X-UA-Compatible" content="IE=edge">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Block <%= @hash %> - Zcash Explorer</title>
-        <link rel="stylesheet" href="/css/app.css">
+        <link rel="stylesheet" href="/assets/app.css">
       </head>
       <body class="bg-gray-50 dark:bg-gray-900">
         <%= if @standalone do %>
@@ -215,8 +219,10 @@ defmodule ZcashExplorerWeb.BlockLive do
   defp tx_link(tx), do: "/transactions/#{tx.txid}"
 
   defp miner_address(nil), do: "Unknown"
+
   defp miner_address(block) do
     coinbase = Enum.find(block.tx || [], &(&1.vin && length(&1.vin) > 0 && hd(&1.vin).coinbase))
+
     case coinbase && coinbase.vout && List.first(coinbase.vout) do
       %{scriptPubKey: %{addresses: [addr | _]}} -> addr
       _ -> "Unknown"
@@ -224,14 +230,19 @@ defmodule ZcashExplorerWeb.BlockLive do
   end
 
   defp input_count(nil), do: 0
-  defp input_count(block), do: Enum.reduce(block.tx || [], 0, fn tx, acc -> acc + length(tx.vin || []) end)
+
+  defp input_count(block),
+    do: Enum.reduce(block.tx || [], 0, fn tx, acc -> acc + length(tx.vin || []) end)
 
   defp output_count(nil), do: 0
-  defp output_count(block), do: Enum.reduce(block.tx || [], 0, fn tx, acc -> acc + length(tx.vout || []) end)
+
+  defp output_count(block),
+    do: Enum.reduce(block.tx || [], 0, fn tx, acc -> acc + length(tx.vout || []) end)
 
   defp input_total(_), do: 0.0
 
   defp output_total(nil), do: 0.0
+
   defp output_total(block) do
     Enum.reduce(block.tx || [], Decimal.new(0), fn tx, acc ->
       Decimal.add(acc, Decimal.from_float(tx.valueBalance || 0.0))
@@ -240,6 +251,7 @@ defmodule ZcashExplorerWeb.BlockLive do
   end
 
   defp tx_output_total(nil), do: 0.0
+
   defp tx_output_total(tx) do
     Enum.reduce(tx.vout || [], 0.0, fn vout, acc ->
       acc + (vout.value || 0.0)
@@ -247,8 +259,10 @@ defmodule ZcashExplorerWeb.BlockLive do
   end
 
   defp tx_fee(nil, _full_cache), do: 0.0
+
   defp tx_fee(tx, full_cache) do
     full = Map.get(full_cache, tx.txid)
+
     if is_nil(full) || is_coinbase?(full) do
       0.0
     else
@@ -264,6 +278,7 @@ defmodule ZcashExplorerWeb.BlockLive do
   end
 
   defp total_fees(nil, _full_cache), do: 0.0
+
   defp total_fees(block, full_cache) do
     Enum.reduce(block.tx || [], 0.0, fn tx, acc ->
       acc + tx_fee(tx, full_cache)
@@ -288,7 +303,9 @@ defmodule ZcashExplorerWeb.BlockLive do
           prev_tx = Map.get(full_cache, ptxid) || %{}
           vout = Enum.at(prev_tx["vout"] || [], idx)
           acc + safe_zats(vout)
-        _ -> acc
+
+        _ ->
+          acc
       end
     end)
   end
@@ -312,9 +329,11 @@ defmodule ZcashExplorerWeb.BlockLive do
   end
 
   defp safe_zats(nil), do: 0
+
   defp safe_zats(vout) when is_map(vout) do
     vout["valueZat"] || (vout["value"] && round(vout["value"] * 100_000_000)) || 0
   end
+
   defp safe_zats(_), do: 0
 
   defp is_coinbase?(full_tx) do
@@ -328,12 +347,15 @@ defmodule ZcashExplorerWeb.BlockLive do
     |> Decimal.round(8)
     |> Decimal.to_string(:normal)
   end
+
   defp format_zec(_), do: "0.00000000"
 
   defp relative_time(nil), do: ""
+
   defp relative_time(unix_time) when is_integer(unix_time) do
     now = DateTime.utc_now() |> DateTime.to_unix()
     diff = now - unix_time
+
     cond do
       diff < 60 -> "#{diff} seconds ago"
       diff < 3600 -> "#{div(diff, 60)} minutes ago"
