@@ -23,16 +23,13 @@ defmodule ZcashExplorerWeb.Router do
     live "/blocks/:hash", BlockLive
     live "/transactions", RecentTransactionsLive
     live "/transactions/:txid", TransactionLive
-
     live "/blockchain-info", BlockChainInfoLive
-    # ← fixed: was MempoolLive
     live "/mempool", RawMempoolLive
     live "/nodes", NodesLive
-    # ← you may need to create this later
     live "/broadcast", BroadcastLive
     live "/vk", VkLive
 
-    # Metric / helper LiveViews (keep as-is)
+    # Metric / helper LiveViews
     live "/price", PriceLive
     live "/metrics/difficulty", DifficultyLive
     live "/metrics/block_count", BlockCountLive
@@ -42,20 +39,17 @@ defmodule ZcashExplorerWeb.Router do
     live "/live/raw_mempool", RawMempoolLive
     live "/live/orchard_pool", OrchardPoolLive
 
-    # Remove these old duplicate index routes (no longer needed)
-    # live "/index/recent_blocks", RecentBlocksLive
-    # live "/index/recent_transactions", RecentTransactionsLive
-
-    # Keep controller routes only for forms / POST actions / search
+    # Search and Address pages
     get "/search", SearchController, :search
-    get "/address/:address", AddressController, :get_address
+    live "/address/:address", AddressLive          # ← changed to LiveView
     get "/ua/:address", AddressController, :get_ua
+
     post "/broadcast", PageController, :do_broadcast
     get "/payment-disclosure", PageController, :disclosure
     post "/payment-disclosure", PageController, :do_disclosure
     post "/vk", PageController, :do_import_vk
 
-    # API routes (unchanged)
+    # API routes
     get "/transactions/:txid/raw", TransactionController, :get_raw_transaction
   end
 
@@ -69,10 +63,8 @@ defmodule ZcashExplorerWeb.Router do
   # LiveDashboard (development only)
   if Mix.env() in [:dev, :test] do
     import Phoenix.LiveDashboard.Router
-
     scope "/" do
       pipe_through :browser
-
       live_dashboard "/dashboard",
         metrics: ZcashExplorerWeb.Telemetry,
         ecto_repos: [ZcashExplorer.Repo]
