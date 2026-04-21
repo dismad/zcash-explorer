@@ -19,144 +19,92 @@ defmodule ZcashExplorerWeb.HomeLive do
         <title>Zcash Explorer - Search the Zcash Blockchain</title>
         <link rel="stylesheet" href="/assets/app.css">
       </head>
-      <body class="bg-gray-50 dark:bg-gray-900">
-
-        <!-- ===== HEADER (your exact current header) ===== -->
-        <header class="bg-indigo-600 text-white h-14 flex items-center">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
-     <div class="flex items-center justify-between h-full">
-       
-       <!-- Logo + Title -->
-       <div class="flex items-center gap-x-3 flex-shrink-0">
-    <a href="/" class="flex items-center">
-    <img src="/images/zcash-icon-white.svg" class="h-8 w-8" alt="Zcash">
-    </a>
-    <a href="/" class="text-xl font-semibold tracking-tight">Zcash Block Explorer</a>
-       </div>
-
-       <!-- Search Bar -->
-       <div class="flex-1 max-w-2xl mx-8 mt-4">
-    <form action="/search" class="relative">
-    <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-      <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-white/70" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 01-14 0 7 7 0 0114 0z" />
-      </svg>
-    </div>
-    <input 
-      name="qs" 
-      type="search"
-      class="block w-full pl-11 pr-4 py-2.5 bg-white/20 hover:bg-white/30 focus:bg-white focus:text-gray-900 placeholder:text-white/70 text-white rounded-3xl text-base focus:outline-none focus:ring-2 focus:ring-white/50 transition-all"
-      placeholder="transaction / block / address"
-    >
-    </form>
-       </div>
-
-       <!-- Desktop Navigation -->
-       <div class="hidden lg:flex items-center gap-x-8 text-sm font-medium flex-shrink-0">
-    <a href="/mempool" class="hover:text-white/80 transition-colors">Mempool</a>
-    <a href="/blocks" class="hover:text-white/80 transition-colors">Blocks</a>
-    <a href="/nodes" class="hover:text-white/80 transition-colors">Nodes</a>
-    <a href="/broadcast" class="hover:text-white/80 transition-colors">Broadcast</a>
-    <%= if @zcash_network != "testnet" do %>
-    <a href="/vk" class="hover:text-white/80 transition-colors">Viewing Key</a>
-    <% end %>
-       </div>
-     </div>
-    </div>
-    </header>
-
-        <!-- ===== MAIN CONTENT WITH ALL 4 CARDS ===== -->
-        <div class="grid gap-4 grid-cols-1 mx-8 py-5">
-          <!-- 4 Cards -->
-          <div class="grid gap-5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
-            <!-- Orchard Pool -->
-            <div class="relative bg-white pt-5 px-4 pb-12 sm:pt-6 sm:px-6 shadow rounded-lg overflow-hidden dark:bg-gray-800">
-              <dt>
-                <div class="absolute bg-green-500 rounded-md p-3">
-                  <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
-                  </svg>
-                </div>
-                <p class="ml-16 text-sm font-medium text-gray-500 truncate">Orchard Pool</p>
-              </dt>
-              <dd class="ml-16 pb-6 flex items-baseline sm:pb-7">
-                <div class="text-3xl font-semibold whitespace-nowrap">
-                  <%= live_render(@socket, ZcashExplorerWeb.OrchardPoolLive, id: "orchard-pool") %>
-                </div>
-              </dd>
-              <div class="absolute bottom-0 inset-x-0 bg-gray-50 px-4 py-4 sm:px-6 dark:bg-gray-700">
-                <a href="/blockchain-info" class="font-medium text-indigo-600 hover:text-indigo-500 dark:text-white dark:hover:text-slate-50">View blockchain info →</a>
-              </div>
-            </div>
-
-            <!-- Blocks -->
-            <div class="relative bg-white pt-5 px-4 pb-12 sm:pt-6 sm:px-6 shadow rounded-lg overflow-hidden dark:bg-gray-800">
-              <dt>
-                <div class="absolute bg-green-500 rounded-md p-3">
-                  <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2" />
-                  </svg>
-                </div>
-                <p class="ml-16 text-sm font-medium text-gray-500 truncate">Blocks</p>
-              </dt>
-              <dd class="ml-16 pb-6 flex items-baseline sm:pb-7">
-                <div class="text-3xl font-semibold whitespace-nowrap">
-                  <%= live_render(@socket, ZcashExplorerWeb.BlockCountLive, id: "block-count") %>
-                </div>
-              </dd>
-              <div class="absolute bottom-0 inset-x-0 bg-gray-50 px-4 py-4 sm:px-6 dark:bg-gray-700">
-                <a href="/blocks" class="font-medium text-indigo-600 hover:text-indigo-500 dark:text-white dark:hover:text-slate-50">View blocks →</a>
-              </div>
-            </div>
-
-            <!-- Mempool Transactions -->
-            <div class="relative bg-white pt-5 px-4 pb-12 sm:pt-6 sm:px-6 shadow rounded-lg overflow-hidden dark:bg-gray-800">
-              <dt>
-                <div class="absolute bg-violet-500 rounded-md p-3">
-                  <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                  </svg>
-                </div>
-                <p class="ml-16 text-sm font-medium text-gray-500 truncate">Mempool Transactions</p>
-              </dt>
-              <dd class="ml-16 pb-6 flex items-baseline sm:pb-7">
-                <div class="text-3xl font-semibold whitespace-nowrap">
-                  <%= live_render(@socket, ZcashExplorerWeb.MempoolInfoLive, id: "mempool-info", session: %{"standalone" => false}) %>
-                </div>
-              </dd>
-              <div class="absolute bottom-0 inset-x-0 bg-gray-50 px-4 py-4 sm:px-6 dark:bg-gray-700">
-                <a href="/mempool" class="font-medium text-indigo-600 hover:text-indigo-500 dark:text-white dark:hover:text-slate-50">View mempool transactions →</a>
-              </div>
-            </div>
-
-            <!-- Blockchain Size -->
-            <div class="relative bg-white pt-5 px-4 pb-12 sm:pt-6 sm:px-6 shadow rounded-lg overflow-hidden dark:bg-gray-800">
-              <dt>
-                <div class="absolute bg-green-500 rounded-md p-3">
-                  <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
-                  </svg>
-                </div>
-                <p class="ml-16 text-sm font-medium text-gray-500 truncate">Blockchain Size</p>
-              </dt>
-              <dd class="ml-16 pb-6 flex items-baseline sm:pb-7">
-                <div class="text-3xl font-semibold whitespace-nowrap">
-                  <%= live_render(@socket, ZcashExplorerWeb.BlockChainSizeLive, id: "blockchain-size") %>
-                </div>
-              </dd>
-              <div class="absolute bottom-0 inset-x-0 bg-gray-50 px-4 py-4 sm:px-6 dark:bg-gray-700">
-                <a href="/blockchain-info" class="font-medium text-indigo-600 hover:text-indigo-500 dark:text-white dark:hover:text-slate-50">View blockchain info →</a>
+      <body class="bg-gray-50 dark:bg-gray-900 pb-20">
+        <!-- ===== TOP BANNER (Logo only - super clean) ===== -->
+        <header class="bg-gradient-to-r from-blue-950 via-blue-900 to-blue-800 text-white sticky top-0 z-50 shadow-md">
+          <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="h-14 flex items-center justify-between">
+              <!-- Logo + Title -->
+              <div class="flex items-center gap-x-3 flex-shrink-0">
+                <a href="/" class="flex items-center">
+                  <img src="/images/zcash-icon-white.svg" class="h-8 w-8" alt="Zcash">
+                </a>
+                <a href="/" class="text-xl font-semibold tracking-tight">Zcash Block Explorer</a>
               </div>
             </div>
           </div>
+        </header>
 
-          <!-- Recent Blocks -->
+        <!-- ===== SEARCH BAR ===== -->
+        <div class="mx-auto px-4 sm:px-6 lg:px-8 py-5 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+          <div class="max-w-2xl mx-auto">
+            <form action="/search" class="relative">
+              <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 01-14 0 7 7 0 0114 0z" />
+                </svg>
+              </div>
+              <input
+                name="qs"
+                type="search"
+                class="block w-full pl-11 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-3xl text-base focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-gray-900 placeholder:text-gray-400 dark:placeholder:text-gray-500"
+                placeholder="Search transactions, blocks, addresses..."
+              >
+            </form>
+          </div>
+        </div>
+
+        <!-- ===== BOTTOM NAVIGATION (now visible on ALL screen sizes) ===== -->
+        <nav class="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 z-50 shadow-lg">
+          <div class="max-w-7xl mx-auto grid grid-cols-5 text-xs">
+            <a href="/mempool" class="flex flex-col items-center py-3 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+              <span class="font-medium">Mempool</span>
+            </a>
+
+            <!-- BLOCKS LINK WITH CUBE ICON -->
+            <a href="/blocks" class="flex flex-col items-center py-3 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-blue-600 dark:text-blue-400">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                <line x1="12" y1="22.08" x2="12" y2="12"></line>
+              </svg>
+              <span class="font-medium">Blocks</span>
+            </a>
+
+            <!-- NEW: TRANSACTIONS LINK (right next to Blocks) -->
+            <a href="/transactions" class="flex flex-col items-center py-3 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+              </svg>
+              <span class="font-medium">Txs</span>
+            </a>
+
+            <a href="/blockchain-info" class="flex flex-col items-center py-3 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 4.01V8" />
+              </svg>
+              <span class="font-medium">Node</span>
+            </a>
+
+            <a href="/dev/rpc" class="flex flex-col items-center py-3 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M8 9l3 3-3 3m5 0h3M4 12a8 8 0 018-8 8 8 0 01-8 8z" />
+              </svg>
+              <span class="font-medium">RPCs</span>
+            </a>
+          </div>
+        </nav>
+
+        <!-- ===== MAIN CONTENT ===== -->
+        <div class="mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div class="mb-12">
             <h2 class="text-2xl font-semibold mb-6 text-gray-900 dark:text-white">Recent Blocks</h2>
             <%= live_render(@socket, ZcashExplorerWeb.RecentBlocksLive, id: "recent-blocks", session: %{"standalone" => false}) %>
           </div>
 
-          <!-- Recent Transactions -->
           <div>
             <h2 class="text-2xl font-semibold mb-6 text-gray-900 dark:text-white">Recent Transactions</h2>
             <%= live_render(@socket, ZcashExplorerWeb.RecentTransactionsLive, id: "recent-transactions", session: %{"standalone" => false}) %>
@@ -183,19 +131,13 @@ defmodule ZcashExplorerWeb.HomeLive do
                 </div>
               <% end %>
             </nav>
-
-            <div class="mt-8 flex justify-center space-x-6">
-              <!-- Twitter and GitHub links can go here if you want them -->
-            </div>
-
             <p class="mt-8 text-center text-base text-gray-400">
-              &copy; <%= DateTime.utc_now().year %> 
+              &copy; <%= DateTime.utc_now().year %>
               <a href="https://nighthawkapps.com/" target="_blank" rel="noreferrer">Nighthawk Apps</a>.
               <span class="block sm:inline">No tracker #Zcash Block Explorer.</span>
             </p>
           </div>
         </footer>
-
       </body>
     </html>
     """

@@ -70,33 +70,15 @@ defmodule ZcashExplorerWeb.RpcDiscoverLive do
       </head>
       <body class="bg-gray-50 dark:bg-gray-900">
 
-        <header class="bg-indigo-600 text-white h-14 flex items-center">
-          <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
-            <div class="flex items-center justify-between h-full">
+        <header class="bg-gradient-to-r from-blue-950 via-blue-900 to-blue-800 text-white sticky top-0 z-50 shadow-md">
+          <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="h-14 flex items-center justify-between">
+              <!-- Logo + Title -->
               <div class="flex items-center gap-x-3 flex-shrink-0">
                 <a href="/" class="flex items-center">
                   <img src="/images/zcash-icon-white.svg" class="h-8 w-8" alt="Zcash">
                 </a>
                 <a href="/" class="text-xl font-semibold tracking-tight">Zcash Block Explorer</a>
-              </div>
-
-              <div class="flex-1 max-w-2xl mx-8 mt-4">
-                <form action="/search" class="relative">
-                  <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-white/70" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 01-14 0 7 7 0 0114 0z" />
-                    </svg>
-                  </div>
-                  <input name="qs" type="search"
-                    class="block w-full pl-11 pr-4 py-2.5 bg-white/20 hover:bg-white/30 focus:bg-white focus:text-gray-900 placeholder:text-white/70 text-white rounded-3xl text-base focus:outline-none focus:ring-2 focus:ring-white/50 transition-all"
-                    placeholder="Search RPC methods...">
-                </form>
-              </div>
-
-              <div class="hidden lg:flex items-center gap-x-8 text-sm font-medium flex-shrink-0">
-                <a href="/mempool" class="hover:text-white/80">Mempool</a>
-                <a href="/blocks" class="hover:text-white/80">Blocks</a>
-                <a href="/dev/rpc" class="text-white font-semibold">RPC Explorer</a>
               </div>
             </div>
           </div>

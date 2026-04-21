@@ -50,65 +50,19 @@ defmodule ZcashExplorerWeb.MempoolInfoLive do
 
         <!-- Header only on standalone page -->
         <%= if @standalone do %>
-          <header>
-            <nav x-data="{ open: false }" class="shrink-0 bg-indigo-600 dark:bg-gray-800">
-              <div class="max-w-7xl mx-auto px-2 sm:px-4 lg:px-8">
-                <div class="relative flex items-center justify-between h-16">
-                  <!-- Logo -->
-                  <div class="flex items-center px-2 lg:px-0 xl:w-64">
-                    <a href="/">
-                      <div class="shrink-0">
-                        <img class="h-8 w-auto" src="/images/zcash-icon-white.svg" alt="Zcash Block Explorer">
-                      </div>
-                    </a>
-                    <a href="/">
-                      <%= if @zcash_network == "testnet" do %>
-                        <div class="shrink-0 px-1 text-white dark:text-white md:block lg:block xl:block 2xl:block hidden">Zcash Testnet Block Explorer</div>
-                      <% else %>
-                        <div class="shrink-0 px-1 text-white dark:text-white md:block lg:block xl:block 2xl:block hidden">Zcash Block Explorer</div>
-                      <% end %>
-                    </a>
-                  </div>
-
-                  <!-- Search -->
-                  <div class="flex-1 flex justify-center lg:justify-end">
-                    <div class="w-full px-2 lg:px-6">
-                      <form action="/search">
-                        <div class="relative text-gray-200 dark:text-slate-200 focus-within:text-gray-400 dark:focus-within:text-slate-800">
-                          <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                            <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                              <path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd" />
-                            </svg>
-                          </div>
-                          <input name="qs" class="block w-full pl-10 pr-3 py-2 border border-transparent rounded-md leading-5 text-indigo-100 placeholder-indigo-200 focus:outline-none focus:bg-white focus:ring-0 focus:placeholder-gray-400 focus:text-gray-900 sm:text-sm dark:focus:placeholder-white dark:border-slate-600 dark:placeholder-slate-400 dark:text-white dark:focus:ring-slate-500 dark:focus:border-slate-500 dark:hover:bg-slate-700 dark:focus:ring-slate-800 bg-white/25 dark:bg-slate-700 dark:focus:bg-slate-600 dark:placeholder-slate-200 dark:focus:text-gray-200" placeholder="transaction / block / address" type="search">
-                        </div>
-                      </form>
-                    </div>
-                  </div>
-
-                  <!-- Desktop nav -->
-                  <div class="hidden lg:block lg:w-80 z-40">
-                    <div class="flex items-center justify-end">
-                      <a href="/mempool" class="px-3 py-2 rounded-md text-sm font-medium text-indigo-200 hover:text-white dark:text-gray-400">Mempool</a>
-                      <a href="/blocks" class="px-3 py-2 rounded-md text-sm font-medium text-indigo-200 hover:text-white dark:text-gray-400">Blocks</a>
-                      <a href="/nodes" class="px-3 py-2 rounded-md text-sm font-medium text-indigo-200 hover:text-white dark:text-gray-400">Nodes</a>
-                      <a href="/broadcast" class="px-3 py-2 rounded-md text-sm font-medium text-indigo-200 hover:text-white dark:text-gray-400">Broadcast</a>
-                      <a href="/vk" class="px-3 py-2 rounded-md text-sm font-medium text-indigo-200 hover:text-white dark:text-gray-400">Viewing Key</a>
-                    </div>
-                  </div>
-                </div>
+          <header class="bg-gradient-to-r from-blue-950 via-blue-900 to-blue-800 text-white sticky top-0 z-50 shadow-md">
+          <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="h-14 flex items-center justify-between">
+              <!-- Logo + Title -->
+              <div class="flex items-center gap-x-3 flex-shrink-0">
+                <a href="/" class="flex items-center">
+                  <img src="/images/zcash-icon-white.svg" class="h-8 w-8" alt="Zcash">
+                </a>
+                <a href="/" class="text-xl font-semibold tracking-tight">Zcash Block Explorer</a>
               </div>
-
-              <!-- Mobile menu -->
-              <div x-show="open" class="lg:hidden bg-indigo-700 dark:bg-gray-900 px-2 pt-2 pb-3">
-                <a href="/mempool" class="block px-3 py-2 text-white hover:bg-indigo-600 rounded-md">Mempool</a>
-                <a href="/blocks" class="block px-3 py-2 text-white hover:bg-indigo-600 rounded-md">Blocks</a>
-                <a href="/nodes" class="block px-3 py-2 text-white hover:bg-indigo-600 rounded-md">Nodes</a>
-                <a href="/broadcast" class="block px-3 py-2 text-white hover:bg-indigo-600 rounded-md">Broadcast Transaction</a>
-                <a href="/vk" class="block px-3 py-2 text-white hover:bg-indigo-600 rounded-md">Viewing Key</a>
-              </div>
-            </nav>
-          </header>
+            </div>
+          </div>
+        </header>
         <% end %>
 
         <!-- Mempool count display -->
