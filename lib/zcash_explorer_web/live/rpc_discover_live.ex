@@ -62,13 +62,13 @@ defmodule ZcashExplorerWeb.RpcDiscoverLive do
     <html lang="en">
       <head>
         <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
         <title><%= @page_title %></title>
         <link rel="stylesheet" href="/assets/app.css">
         <meta name="csrf-token" content={Phoenix.Controller.get_csrf_token()}>
         <script src="/js/app.js"></script>
       </head>
-      <body class="bg-gray-50 dark:bg-gray-900">
+      <body class="bg-gray-50 dark:bg-gray-900 flex flex-col min-h-screen">
 
         <header class="bg-gradient-to-r from-blue-950 via-blue-900 to-blue-800 text-white sticky top-0 z-50 shadow-md">
           <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -84,86 +84,97 @@ defmodule ZcashExplorerWeb.RpcDiscoverLive do
           </div>
         </header>
 
-        <div class="mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 h-[calc(100vh-8rem)]">
+        <div class="flex-1 w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <div class="flex flex-col lg:grid lg:grid-cols-12 gap-6 lg:gap-8 h-full lg:h-[calc(100vh-4rem)] min-h-0">
 
             <!-- Left Sidebar -->
-            <div class="lg:col-span-4 bg-white dark:bg-gray-800 shadow rounded-3xl p-6 overflow-auto">
-              <h1 class="text-2xl font-semibold mb-6 flex items-center gap-x-3">
-                <span>Zebra RPC Methods</span>
-                <span class="text-xs font-normal bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-300 px-3 py-1 rounded-3xl"><%= length(@methods) %> total</span>
-              </h1>
+            <div class="lg:col-span-4 bg-white dark:bg-gray-800 shadow rounded-3xl flex flex-col">
+              <div class="flex-shrink-0 p-6 border-b border-gray-100 dark:border-gray-700">
+                <h1 class="text-2xl font-semibold mb-5 flex items-center gap-x-3">
+                  <span>Zebra RPC Methods</span>
+                  <span class="text-xs font-normal bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-300 px-3 py-1 rounded-3xl">
+                    <%= length(@methods) %> total
+                  </span>
+                </h1>
 
-              <input type="text" phx-keyup="search" phx-debounce="200"
-                     placeholder="Filter methods..."
-                     class="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500 mb-6">
+                <input type="text"
+                       phx-keyup="search"
+                       phx-debounce="200"
+                       placeholder="Filter methods..."
+                       class="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500">
+              </div>
 
-              <div class="space-y-1 max-h-[calc(100vh-260px)] overflow-auto pr-2">
-                <%= for method <- @methods do %>
-                  <button phx-click="select_method" phx-value-name={method["name"]}
-                    class={"w-full text-left px-4 py-3 rounded-3xl transition-all hover:shadow-md border border-transparent font-mono text-base " <>
-                      if @selected_method && @selected_method["name"] == method["name"] do
-                        "bg-indigo-600 text-white shadow-md"
-                      else
-                        "hover:bg-gray-50 dark:hover:bg-gray-700"
-                      end}>
-                    <%= method["name"] %>
-                  </button>
-                <% end %>
+              <div class="flex-1 min-h-0 overflow-auto p-6 pt-2">
+                <div class="space-y-1 pr-2">
+                  <%= for method <- @methods do %>
+                    <button phx-click="select_method"
+                            phx-value-name={method["name"]}
+                            class={"w-full text-left px-5 py-3.5 rounded-3xl transition-all hover:shadow-md border border-transparent font-mono text-base active:scale-[0.98] " <>
+                              if @selected_method && @selected_method["name"] == method["name"] do
+                                "bg-indigo-600 text-white shadow-md"
+                              else
+                                "hover:bg-gray-50 dark:hover:bg-gray-700"
+                              end}>
+                      <%= method["name"] %>
+                    </button>
+                  <% end %>
+                </div>
               </div>
             </div>
 
             <!-- Right Panel -->
-            <div class="lg:col-span-8 bg-white dark:bg-gray-800 shadow rounded-3xl p-8 overflow-auto">
-              <%= if @selected_method do %>
-                <div class="prose dark:prose-invert max-w-none">
-                  <div class="flex items-center gap-x-3 mb-6">
-                    <.method_icon tags={@selected_method["tags"]} size="lg" />
-                    <h2 class="text-3xl font-semibold font-mono m-0"><%= @selected_method["name"] %></h2>
-                  </div>
-
-                  <.method_tags tags={@selected_method["tags"]} large={true} />
-
-                  <p class="text-lg text-gray-600 dark:text-gray-400 mt-4"><%= @selected_method["summary"] %></p>
-                  <p class="mt-6 leading-relaxed"><%= @selected_method["description"] %></p>
-
-                  <!-- Curl Example -->
-                  <h3 class="mt-10 text-xl font-semibold">Example curl command</h3>
-                  <pre class="mt-4 p-6 bg-gray-900 text-gray-100 dark:bg-black rounded-3xl text-sm overflow-auto font-mono whitespace-pre"><%= @example_curl %></pre>
-
-                  <!-- Parameters -->
-                  <%= if @selected_method["params"] && length(@selected_method["params"]) > 0 do %>
-                    <h3 class="mt-10 text-xl font-semibold">Parameters</h3>
-                    <div class="mt-4 space-y-6">
-                      <%= for param <- @selected_method["params"] do %>
-                        <div class="border border-gray-200 dark:border-gray-700 rounded-2xl p-6">
-                          <div class="flex justify-between items-start">
-                            <div>
-                              <span class="font-mono font-medium"><%= param["name"] %></span>
-                              <%= if param["required"] do %>
-                                <span class="ml-2 text-xs px-3 py-1 bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300 rounded-3xl">required</span>
-                              <% end %>
-                            </div>
-                          </div>
-                          <p class="text-sm text-gray-500 mt-3"><%= param["description"] %></p>
-                        </div>
-                      <% end %>
+            <div class="lg:col-span-8 bg-white dark:bg-gray-800 shadow rounded-3xl flex flex-col overflow-hidden">
+              <div class="flex-1 p-6 lg:p-8 overflow-auto">
+                <%= if @selected_method do %>
+                  <div class="prose dark:prose-invert max-w-none">
+                    <div class="flex items-center gap-x-3 mb-6">
+                      <.method_icon tags={@selected_method["tags"]} size="lg" />
+                      <h2 class="text-2xl sm:text-3xl font-semibold font-mono m-0"><%= @selected_method["name"] %></h2>
                     </div>
-                  <% end %>
 
-                  <!-- Real result (safe for all methods now) -->
-                  <%= if @live_result do %>
-                    <h3 class="mt-10 text-xl font-semibold">Real Result from Node (Live)</h3>
-                    <pre class="mt-4 p-6 bg-gray-900 text-gray-100 dark:bg-black rounded-3xl text-sm overflow-auto font-mono"><%= @live_result %></pre>
-                  <% end %>
-                </div>
-              <% else %>
-                <div class="flex flex-col items-center justify-center h-96 text-center">
-                  <div class="text-7xl mb-8 opacity-30">🔎</div>
-                  <h3 class="text-3xl font-semibold text-gray-400">Select a method on the left</h3>
-                  <p class="text-gray-500 mt-4 max-w-xs">Click any RPC method to see a realistic curl example + documentation.</p>
-                </div>
-              <% end %>
+                    <.method_tags tags={@selected_method["tags"]} large={true} />
+
+                    <p class="text-lg text-gray-600 dark:text-gray-400 mt-4"><%= @selected_method["summary"] %></p>
+                    <p class="mt-6 leading-relaxed"><%= @selected_method["description"] %></p>
+
+                    <!-- Curl Example -->
+                    <h3 class="mt-10 text-xl font-semibold">Example curl command</h3>
+                    <pre class="mt-4 p-5 sm:p-6 bg-gray-900 text-gray-100 dark:bg-black rounded-3xl text-sm overflow-x-auto font-mono whitespace-pre border border-gray-800"><%= @example_curl %></pre>
+
+                    <!-- Parameters -->
+                    <%= if @selected_method["params"] && length(@selected_method["params"]) > 0 do %>
+                      <h3 class="mt-10 text-xl font-semibold">Parameters</h3>
+                      <div class="mt-4 space-y-6">
+                        <%= for param <- @selected_method["params"] do %>
+                          <div class="border border-gray-200 dark:border-gray-700 rounded-2xl p-5 sm:p-6">
+                            <div class="flex justify-between items-start">
+                              <div>
+                                <span class="font-mono font-medium"><%= param["name"] %></span>
+                                <%= if param["required"] do %>
+                                  <span class="ml-2 text-xs px-3 py-1 bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300 rounded-3xl">required</span>
+                                <% end %>
+                              </div>
+                            </div>
+                            <p class="text-sm text-gray-500 mt-3"><%= param["description"] %></p>
+                          </div>
+                        <% end %>
+                      </div>
+                    <% end %>
+
+                    <!-- Real result (safe for all methods now) -->
+                    <%= if @live_result do %>
+                      <h3 class="mt-10 text-xl font-semibold">Real Result from Node (Live)</h3>
+                      <pre class="mt-4 p-5 sm:p-6 bg-gray-900 text-gray-100 dark:bg-black rounded-3xl text-sm overflow-x-auto font-mono border border-gray-800"><%= @live_result %></pre>
+                    <% end %>
+                  </div>
+                <% else %>
+                  <div class="flex flex-col items-center justify-center h-96 text-center">
+                    <div class="text-7xl mb-8 opacity-30">🔎</div>
+                    <h3 class="text-3xl font-semibold text-gray-400">Select a method on the left</h3>
+                    <p class="text-gray-500 mt-4 max-w-xs">Tap any RPC method to see a realistic curl example + documentation.</p>
+                  </div>
+                <% end %>
+              </div>
             </div>
           </div>
         </div>

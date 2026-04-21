@@ -11,7 +11,7 @@ defmodule ZcashExplorerWeb.RecentBlocksLive do
     case Cachex.get(:app_cache, "block_cache") do
       {:ok, info} ->
         {:ok, %{"chain" => chain}} = Cachex.get(:app_cache, "metrics")
-        blocks_to_show = if standalone, do: info, else: Enum.take(info, 12)
+        blocks_to_show = if standalone, do: info, else: Enum.take(info, 6)
 
         {:ok,
          assign(socket,
