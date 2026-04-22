@@ -28,6 +28,7 @@ defmodule ZcashExplorerWeb.Router do
     live "/nodes", NodesLive
     live "/broadcast", BroadcastLive
     live "/vk", VkLive
+    live "/block-radar", BlockRadarLive, :index
 
     # Shielded addresses (z1..., zs1..., u1...) — single LiveView
     live "/shielded/:address", ShieldedAddressLive

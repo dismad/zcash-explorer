@@ -77,6 +77,19 @@ defmodule ZcashExplorerWeb.RecentBlocksLive do
         </header>    
         <% end %>
 
+        <!-- New: Recent Blocks title + arrow + Block Radar link -->
+        <div class="mx-auto px-6 pt-6 pb-3 flex items-center gap-x-3">
+          
+          
+          
+
+          <!-- Satellite icon + Block Radar link -->
+          <a href="/block-radar" class="flex items-center gap-x-1.5 text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 transition-colors">
+            <span class="text-xl">📡</span>
+            <span class="font-medium">Block Radar</span>
+          </a>
+        </div>
+
         <!-- Table -->
         <div class="w-full">
           <div class="shadow overflow-hidden border-gray-200 rounded-lg overflow-x-auto">

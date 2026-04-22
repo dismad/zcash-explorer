@@ -2,6 +2,8 @@ defmodule ZcashExplorer.Blocks.BlockWarmer do
   use Cachex.Warmer
   require Logger
 
+  @max_blocks 400
+
   @doc """
   Returns the interval for this warmer.
   """
@@ -13,8 +15,10 @@ defmodule ZcashExplorer.Blocks.BlockWarmer do
   def execute(_state) do
     case Zcashex.getblockcount() do
       {:ok, n} ->
+        start_height = max(0, n - @max_blocks + 1)
+
         blocks =
-          Enum.to_list((n - 20)..n)
+          Enum.to_list(start_height..n)
           |> Enum.map(fn x ->
             {:ok, block} = Zcashex.getblock(x, 2)
             block
