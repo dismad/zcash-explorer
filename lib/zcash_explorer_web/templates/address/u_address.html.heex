@@ -10,7 +10,7 @@
     </p>
    <div class="flex flex-row py-2">
    <div class="px-0 dark:bg-gray-400	">
-    <img src={'data:image/png;base64, #{ @qr }'} atl={"QR code for the Zcash Unified Address #{ @address }"}/>
+    <img src={"'data:image/png;base64, #{ @qr }'"} atl={"QR code for the Zcash Unified Address #{ @address }"}/>
     </div>
     </div>
 
@@ -75,7 +75,7 @@
                     Sapling Address
               </h3>
               <p class="text-gray-500 font-mono py-2 break-words">
-              <a class="text-indigo-600 hover:text-indigo-500" href={'/address/#{@details["sapling"]}'}>
+              <a class="text-indigo-600 hover:text-indigo-500" href={"'/address/#{@details["sapling"]}'"}>
               <%= if @sapling_present == true do %>
                            <%= @details["sapling"] %>
               <% end %>
@@ -99,7 +99,7 @@
                     Transparent Address
               </h3>
               <p class="text-gray-500 font-mono py-2 break-words">
-              <a class="text-indigo-600 hover:text-indigo-500" href={'/address/#{@details["p2pkh"]}'}>
+              <a class="text-indigo-600 hover:text-indigo-500" href={"'/address/#{@details["p2pkh"]}'"}>
               <%= if @transparent_present == true do %>
                            <%= @details["p2pkh"] %>
               <% end %>

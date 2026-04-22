@@ -32,7 +32,7 @@
                 Miner
                 </dt>
 
-                <a href={'/address/#{mined_by(@block_data.tx)}'}>
+                <a href={"'/address/#{mined_by(@block_data.tx)}'"}>
                 <dd class="mt-1 text-sm text-indigo-600 hover:text-indigo-400 break-words dark:text-indigo-200">
                 <%= mined_by @block_data.tx %>
                 </dd>
@@ -189,7 +189,7 @@
                   <%= @block_data.height %>
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-200 dark:hover:text-indigo-400">
-              <a href={'/transactions/#{transaction.txid}'}>
+              <a href={"'/transactions/#{transaction.txid}'"}>
 
                     <%= transaction.txid %>
                   </a>

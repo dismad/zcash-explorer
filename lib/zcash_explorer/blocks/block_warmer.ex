@@ -2,35 +2,39 @@ defmodule ZcashExplorer.Blocks.BlockWarmer do
   use Cachex.Warmer
   require Logger
 
+  @max_blocks 400
+
   @doc """
   Returns the interval for this warmer.
   """
-  def interval,
-    do: :timer.seconds(15)
+  def interval, do: :timer.seconds(15)
 
   @doc """
   Executes this cache warmer.
   """
   def execute(_state) do
-    high = DateTime.utc_now() |> DateTime.to_unix()
-    low = DateTime.utc_now() |> DateTime.add(-900, :second) |> DateTime.to_unix()
-    # get the blocks mined in that duration
+    case Zcashex.getblockcount() do
+      {:ok, n} ->
+        start_height = max(0, n - @max_blocks + 1)
 
-    case Zcashex.getblockhashes(high, low, true, false) do
-      {:ok, blocks} ->
-        # enrich the blocks
+        blocks =
+          Enum.to_list(start_height..n)
+          |> Enum.map(fn x ->
+            {:ok, block} = Zcashex.getblock(x, 2)
+            block
+          end)
+
         blocks
         |> Enum.map(fn x ->
-          {:ok, block} = Zcashex.getblock(x, 2)
-          block_struct = Zcashex.Block.from_map(block)
+          block_struct = Zcashex.Block.from_map(x)
 
           %{
             "height" => block_struct.height,
             "size" => block_struct.size,
             "hash" => block_struct.hash,
-            "time" => ZcashExplorerWeb.BlockView.mined_time(block_struct.time),
-            "tx_count" => ZcashExplorerWeb.BlockView.transaction_count(block_struct.tx),
-            "output_total" => ZcashExplorerWeb.BlockView.output_total(block_struct.tx)
+            "time" => ZcashExplorerWeb.Helpers.mined_time(block_struct.time),
+            "tx_count" => length(block_struct.tx || []),
+            "output_total" => ZcashExplorerWeb.Helpers.output_total(block_struct.tx || [])
           }
         end)
         |> Enum.sort(&(&1["height"] >= &2["height"]))
@@ -43,7 +47,7 @@ defmodule ZcashExplorer.Blocks.BlockWarmer do
 
   # ignores the warmer result in case of error
   defp handle_result({:error, reason}) do
-    Logger.error("Error while warming the block cache.#{inspect(reason)}")
+    Logger.error("Error while warming the block cache. #{inspect(reason)}")
     :ignore
   end
 

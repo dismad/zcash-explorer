@@ -1,122 +1,81 @@
 defmodule ZcashExplorerWeb.SearchController do
   use ZcashExplorerWeb, :controller
 
-  def search(conn, %{"qs" => qs}) do
-    qs = String.trim(qs)
-    # query zcashd to find out if the user has entered a valid resource
-    # Valid resources:
-    #  Block - height, hash
-    #  Transaction - hash
-    #  Address - Transparent , Shielded
-    # If zcashd responds that a resource is valid, we redirect the user
-    # to the appropriate resource view or redirect them to an error view.
-    tasks = [
-      Task.async(fn -> Zcashex.getblock(qs, 0) end),
-      Task.async(fn -> Zcashex.getrawtransaction(qs, 0) end),
-      Task.async(fn -> Zcashex.validateaddress(qs) end),
-      Task.async(fn -> Zcashex.z_validateaddress(qs) end)
-    ]
-
-    run = Task.yield_many(tasks, 5000)
-
-    results =
-      Enum.map(run, fn {task, res} ->
-        # Shut down the tasks that did not reply nor exit
-        res || Task.shutdown(task, :brutal_kill)
-      end)
-
-    # order in which the tasks are above defined matters
-    {:ok, block_resp} = Enum.at(results, 0)
-    {:ok, tx_resp} = Enum.at(results, 1)
-    {:ok, tadd_resp} = Enum.at(results, 2)
-    {:ok, zadd_resp} = Enum.at(results, 3)
-
-    IO.inspect(block_resp)
-    IO.inspect(tx_resp)
-    IO.inspect(tadd_resp)
-    IO.inspect(zadd_resp)
-
-    cond do
-      is_valid_block?(block_resp) ->
-        redirect(conn, to: "/blocks/#{qs}")
-
-      is_valid_tx?(tx_resp) ->
-        redirect(conn, to: "/transactions/#{qs}")
-
-      is_valid_taddr?(tadd_resp) ->
-        redirect(conn, to: "/address/#{qs}")
-
-      is_valid_zaddr?(zadd_resp) ->
-        redirect(conn, to: "/address/#{qs}")
-
-      is_valid_unified_address?(zadd_resp) ->
-        redirect(conn, to: "/ua/#{qs}")
-
-      true ->
-        conn
-        |> put_status(:not_found)
-        |> put_view(ZcashExplorerWeb.ErrorView)
-        |> render(:invalid_input)
+  def search(conn, params) do
+    qs = String.trim(params["qs"] || "")
+    if qs == "" do
+      conn
+      |> put_flash(:error, "Please enter a block height, transaction ID, or address")
+      |> redirect(to: "/")
+    else
+      case classify_input(qs) do
+        :block_height ->
+          redirect(conn, to: "/blocks/#{qs}")
+        :block_hash ->
+          redirect(conn, to: "/blocks/#{qs}")
+        :transaction ->
+          redirect(conn, to: "/transactions/#{qs}")
+        :transparent_address ->
+          redirect(conn, to: "/address/#{qs}")
+        :shielded_address ->
+          redirect(conn, to: "/shielded/#{qs}")          # ← updated
+        :unified_address ->
+          redirect(conn, to: "/shielded/#{qs}")          # ← updated
+        :unknown ->
+          conn
+          |> put_flash(:error, "No matching block, transaction, or address found.")
+          |> redirect(to: "/")
+      end
     end
   end
 
-  def is_valid_block?({:ok, {:error, "Block not found"}}) do
-    false
-  end
-
-  def is_valid_block?({:ok, _hex}) do
-    true
-  end
-
-  def is_valid_block?({:error, _reason}) do
-    false
-  end
-
-  def is_valid_tx?({:ok, _hex}) do
-    true
-  end
-
-  def is_valid_tx?({:error, _reason}) do
-    false
-  end
-
-  def is_valid_taddr?({:ok, %{"isvalid" => true}}) do
-    true
-  end
-
-  def is_valid_taddr?({:ok, %{"isvalid" => false}}) do
-    false
-  end
-
-  def is_valid_zaddr?({:ok, %{"isvalid" => true, "type" => "sprout"}}) do
-    true
-  end
-
-  def is_valid_zaddr?({:ok, %{"isvalid" => true, "type" => "sapling"}}) do
-    true
-  end
-
-  def is_valid_zaddr?({:ok, %{"isvalid" => true, "type" => "unified"}}) do
-    false
-  end
-
-  def is_valid_zaddr?({:ok, %{"isvalid" => false}}) do
-    false
-  end
-
-  def is_valid_zaddr?({:ok, %{"isvalid" => true, "address_type" => "unified"}}) do
-    false
-  end
-
-  def is_valid_unified_address?({:ok, %{"isvalid" => true, "type" => "unified"}}) do
-    true
-  end
-
-  def is_valid_unified_address?({:ok, %{"isvalid" => true, "address_type" => "unified"}}) do
-    true
-  end
-
-  def is_valid_unified_address?(_resp) do
-    false
+  # ─────────────────────────────────────────────────────────────
+  # CLASSIFIER USING LEADING-ZEROS HEURISTIC (threshold = 10)
+  # ─────────────────────────────────────────────────────────────
+  defp classify_input(qs) do
+    # Count leading zeros
+    leading_zeros =
+      qs
+      |> String.graphemes()
+      |> Enum.take_while(&(&1 == "0"))
+      |> length()
+    total_length = String.length(qs)
+    # Debug output
+    IO.puts("=== SEARCH CLASSIFIER (leading-zeros ≥ 10 heuristic) ===")
+    IO.inspect(%{
+      input: qs,
+      leading_zeros: leading_zeros,
+      length: total_length,
+      is_numeric: Regex.match?(~r/^\d+$/, qs),
+      is_64hex: total_length == 64 && Regex.match?(~r/^[0-9a-f]{64}$/, qs)
+    }, label: "Raw data")
+    cond do
+      # 1. Purely numeric → always block height
+      Regex.match?(~r/^\d+$/, qs) ->
+        IO.puts("→ CLASSIFIED AS BLOCK HEIGHT (leading zeros: #{leading_zeros})")
+        :block_height
+      # 2. 64-hex string → use your new threshold
+      total_length == 64 && Regex.match?(~r/^[0-9a-f]{64}$/, qs) ->
+        if leading_zeros >= 10 do
+          IO.puts("→ CLASSIFIED AS BLOCK HASH (leading zeros: #{leading_zeros} ≥ 10)")
+          :block_hash
+        else
+          IO.puts("→ CLASSIFIED AS TRANSACTION ID (leading zeros: #{leading_zeros} < 10)")
+          :transaction
+        end
+      # 3. Addresses
+      String.starts_with?(qs, "t1") || String.starts_with?(qs, "t3") ->
+        IO.puts("→ CLASSIFIED AS TRANSPARENT ADDRESS")
+        :transparent_address
+      String.starts_with?(qs, "z") ->
+        IO.puts("→ CLASSIFIED AS SHIELDED ADDRESS")
+        :shielded_address
+      String.starts_with?(qs, "u1") ->
+        IO.puts("→ CLASSIFIED AS UNIFIED ADDRESS")
+        :unified_address
+      true ->
+        IO.puts("→ CLASSIFIED AS UNKNOWN")
+        :unknown
+    end
   end
 end

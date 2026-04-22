@@ -2,7 +2,7 @@
 <h3 class="text-lg leading-6 font-medium text-gray-900 py-3 dark:text-white">
     Broadcast Zcash Transaction
 </h3>
-<%= if get_flash(@conn, :error) do %>
+<%= if Phoenix.Flash.get(@flash, :error) do %>
 <div class="rounded-md bg-red-50 p-4">
   <div class="flex">
     <div class="shrink-0">
@@ -18,7 +18,7 @@
       <div class="mt-2 text-sm text-red-700">
         <ul class="list-disc pl-5 space-y-1">
           <li>
-            <%= get_flash(@conn, :error) %>
+            <%= Phoenix.Flash.get(@flash, :error) %>
           </li>
         </ul>
       </div>
@@ -29,7 +29,7 @@
 
 
 
-<%= if get_flash(@conn, :info) do %>
+<%= if Phoenix.Flash.get(@flash, :info) do %>
 <div class="rounded-md bg-green-50 p-4">
   <div class="flex">
     <div class="shrink-0">
@@ -47,13 +47,13 @@
       <div class="mt-2 text-sm text-green-700">
         <p>
           Transaction Id:
-          <%= get_flash(@conn, :info) %>
+          <%= Phoenix.Flash.get(@flash, :info) %>
         </p>
       </div>
 
       <div class="mt-4">
         <div class="-mx-2 -my-1.5 flex">
-          <a href="/transactions/{get_flash(@conn, :info)}">
+          <a href="/transactions/{Phoenix.Flash.get(@flash, :info)}">
           <button type="button" class="bg-green-50 px-2 py-1.5 rounded-md text-sm font-medium text-green-800 hover:bg-green-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-green-50 focus:ring-green-600">
             View transaction
           </button>

@@ -2,7 +2,7 @@
 // The MiniCssExtractPlugin is used to separate it out into
 // its own CSS file.
 
-import "../css/app.scss"
+import "../css/app.css"
 import "@fontsource/inter/variable.css";
 
 // webpack automatically bundles all modules in your

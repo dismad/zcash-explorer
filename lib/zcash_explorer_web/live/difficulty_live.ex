@@ -1,9 +1,8 @@
 defmodule ZcashExplorerWeb.DifficultyLive do
   use ZcashExplorerWeb, :live_view
-  import Phoenix.LiveView.Helpers
   @impl true
   def render(assigns) do
-    ~L"""
+    ~H"""
     <p class="text-2xl font-semibold text-gray-900 dark:dark:bg-slate-800 dark:text-slate-100">
     <%= Float.ceil(@difficulty,6) %>
     </p>

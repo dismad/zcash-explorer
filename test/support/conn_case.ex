@@ -34,7 +34,7 @@ defmodule ZcashExplorerWeb.ConnCase do
   setup tags do
     :ok = Ecto.Adapters.SQL.Sandbox.checkout(ZcashExplorer.Repo)
 
-    unless tags[:async] do
+    if !tags[:async] do
       Ecto.Adapters.SQL.Sandbox.mode(ZcashExplorer.Repo, {:shared, self()})
     end
 

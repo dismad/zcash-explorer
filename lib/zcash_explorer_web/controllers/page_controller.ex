@@ -178,40 +178,40 @@ defmodule ZcashExplorerWeb.PageController do
   - `/api/supply?q=circulatingSupply` → `"654321.09"`
   """
   def supply(conn, params) do
-    if params == %{} do 
+    if params == %{} do
       {:ok, info} = Cachex.get(:app_cache, "metrics")
       {:ok, %{"build" => build}} = Cachex.get(:app_cache, "info")
       info = Map.put(info, "build", build)
       # Extract the chainValue from the chainSupply map
       value_pools = info["valuePools"]
       json(conn, value_pools)
-    else 
+    else
       case params["q"] do
-        "totalSupply" -> 
+        "totalSupply" ->
           {:ok, info} = Cachex.get(:app_cache, "metrics")
           {:ok, %{"build" => build}} = Cachex.get(:app_cache, "info")
           info = Map.put(info, "build", build)
           # get total supply (chain value)
-          total_supply =  get_in(info, ["chainSupply", "chainValue"])
+          total_supply = get_in(info, ["chainSupply", "chainValue"])
           send_resp(conn, 200, to_string(total_supply))
 
-        "circulatingSupply" -> 
+        "circulatingSupply" ->
           {:ok, info} = Cachex.get(:app_cache, "metrics")
           {:ok, %{"build" => build}} = Cachex.get(:app_cache, "info")
           info = Map.put(info, "build", build)
-          total_supply =  get_in(info, ["chainSupply", "chainValue"])
+          total_supply = get_in(info, ["chainSupply", "chainValue"])
 
-          value_pools = info["valuePools"] 
+          value_pools = info["valuePools"]
           # Find the map where id == "lockbox"
           lockbox = Enum.find(value_pools, fn pool -> pool["id"] == "lockbox" end)
-          
+
           lockbox_supply = lockbox["chainValue"]
           circulating_supply = total_supply - lockbox_supply
           send_resp(conn, 200, to_string(circulating_supply))
-        _ -> 
+
+        _ ->
           send_resp(conn, 404, "valid query keys are 'totalSupply' and 'circulatingSupply'")
       end
     end
   end
-
 end
