@@ -7,7 +7,7 @@ defmodule ZcashExplorerWeb.Endpoint do
   @session_options [
     store: :cookie,
     key: "_zcash_explorer_key",
-    signing_salt: "jw77JXVZmPzcQrA4mudyw+8HKzG0tG35"
+    signing_salt: "Qq4q8J3cllo4E6PGVKYcMrX2hvwkCv/z7lWp+PsFMhMiqLNkjcb1WLYm9SkRnjcI"
   ]
 
   socket "/socket", ZcashExplorerWeb.UserSocket,

@@ -123,7 +123,6 @@ defmodule ZcashExplorerWeb.BlockRadarLive do
         </header>
 
         <div class="max-w-7xl mx-auto p-6">
-          <!-- Centered wrapper for legend + grid/rain + table -->
           <div class="max-w-[1150px] mx-auto">
             <!-- Main dBZ Legend -->
             <div class="mb-8 flex flex-col items-center">
@@ -174,15 +173,15 @@ defmodule ZcashExplorerWeb.BlockRadarLive do
                 <p class="text-center text-xs text-zinc-500 mt-3">Most recent (top-left) → oldest • Auto-refreshes every 15s</p>
               </div>
 
-              <!-- Rain Column with description to the right -->
+              <!-- Rain Column -->
               <div class="flex flex-col items-center gap-3">
                 <div class="text-xs text-zinc-400 text-center tracking-widest">Rain visualization (Last 25 blocks)</div>
 
                 <div class="flex items-start gap-4">
                   <div class="relative bg-zinc-950 border border-zinc-800 rounded-3xl h-[520px] overflow-hidden shadow-2xl w-20 flex-shrink-0">
                     <div class="absolute inset-0 flex flex-col justify-end items-center gap-3 p-3">
-                      <%= for block <- Enum.take(@blocks, 25) do %>
-                        <% prev = Enum.at(@blocks, 1) || block
+                      <%= for {block, idx} <- Enum.with_index(Enum.take(@blocks, 25)) do %>
+                        <% prev = Enum.at(@blocks, idx + 1) || block
                            reflectivity = compute_reflectivity(block, prev, @rolling_avg_size)
                            size_norm = normalized_size(block, @rolling_avg_size) %>
                         <div
@@ -205,7 +204,7 @@ defmodule ZcashExplorerWeb.BlockRadarLive do
               </div>
             </div>
 
-            <!-- Table now aligned left with the grid -->
+            <!-- Table -->
             <div class="mt-12 max-w-[980px]">
               <details open>
                 <summary class="cursor-pointer text-lg font-semibold text-zinc-300 mb-4 flex items-center gap-2">
