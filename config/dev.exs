@@ -6,20 +6,20 @@ config :zcash_explorer, ZcashExplorerWeb.Endpoint,
   code_reloader: true,
   check_origin: false,
   watchers: [
-    node: [
-      "node_modules/webpack/bin/webpack.js",
-      "--mode",
-      "development",
-      "--watch-stdin",
-      cd: Path.expand("../assets", __DIR__),
-      env: [{"NODE_OPTIONS", "--openssl-legacy-provider"}]
-    ],
-    npm: [
-      "run",
-      "watch:css",
-      cd: Path.expand("../assets", __DIR__)
-    ]
+  node: [
+    "node_modules/webpack/bin/webpack.js",
+    "--mode",
+    "development",
+    "--watch-stdin",
+    cd: Path.expand("../assets", __DIR__),
+    env: [{"NODE_OPTIONS", "--openssl-legacy-provider"}]
+  ],
+  npm: [
+    "run",
+    "watch:css",
+    cd: Path.expand("../assets", __DIR__)
   ]
+]
 
 config :zcash_explorer, Zcashex,
   zcashd_hostname: "localhost",
