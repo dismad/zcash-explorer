@@ -4,19 +4,24 @@
 # This configuration file is loaded before any dependency and
 # is restricted to this project.
 
-# General application configuration
 import Config
 
+# General application configuration
 config :zcash_explorer,
   ecto_repos: [ZcashExplorer.Repo]
 
 # Configures the endpoint
 config :zcash_explorer, ZcashExplorerWeb.Endpoint,
   url: [host: "localhost"],
-  secret_key_base: "rVfb1mphofjIChVV5RIHW32JxP+aNNOGR4TaOrFSmEPhywkGmPjNHHj6QKCnMxDq",
+  secret_key_base: System.get_env("SECRET_KEY_BASE") ||
+                   raise("""
+                   environment variable SECRET_KEY_BASE is missing.
+                   You can generate one by calling: mix phx.gen.secret
+                   """),
   render_errors: [view: ZcashExplorerWeb.ErrorView, accepts: ~w(html json), layout: false],
   pubsub_server: ZcashExplorer.PubSub,
-  live_view: [signing_salt: "a4lss9+vZQHOxErTzxjNU4IuhAaslE0Z"]
+  live_view: [signing_salt: System.get_env("SIGNING_SALT") ||
+              raise("environment variable SIGNING_SALT is missing.")]
 
 # Configures Elixir's Logger
 config :logger, :console,

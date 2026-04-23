@@ -4,10 +4,15 @@ defmodule ZcashExplorerWeb.Endpoint do
   # The session will be stored in the cookie and signed,
   # this means its contents can be read but not tampered with.
   # Set :encryption_salt if you would also like to encrypt it.
-  @session_options [
+    @session_options [
     store: :cookie,
     key: "_zcash_explorer_key",
-    signing_salt: "jw77JXVZmPzcQrA4mudyw+8HKzG0tG35"
+    # signing_salt is now loaded from .env (never commit secrets to git)
+    signing_salt: System.get_env("SIGNING_SALT") ||
+                  raise """
+                  environment variable SIGNING_SALT is missing.
+                  You must create a .env file or set SIGNING_SALT.
+                  """
   ]
 
   socket "/socket", ZcashExplorerWeb.UserSocket,
