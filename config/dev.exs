@@ -21,40 +21,38 @@ config :zcash_explorer, ZcashExplorerWeb.Endpoint,
     ]
   ]
 
+# Zebra + cookie authentication (safe version)
 config :zcash_explorer, Zcashex,
   zcashd_hostname: "localhost",
   zcashd_port: "8232",
   zcashd_username:
     (fn ->
        cookie_path = System.get_env("ZCASH_RPC_COOKIE_FILE", "/var/lib/zebrad-rpc/.cookie")
-
        case File.read(cookie_path) do
          {:ok, content} ->
            case String.trim(content) |> String.split(":", parts: 2) do
              ["__cookie__", _] -> "__cookie__"
-             _ -> "nighthawkapps"
+             _ -> "__cookie__"
            end
-
          _ ->
-           "nighthawkapps"
+           Logger.error("❌ Could not read Zebra RPC cookie at #{cookie_path}")
+           "__cookie__"
        end
      end).(),
   zcashd_password:
     (fn ->
        cookie_path = System.get_env("ZCASH_RPC_COOKIE_FILE", "/var/lib/zebrad-rpc/.cookie")
-
        case File.read(cookie_path) do
          {:ok, content} ->
            case String.trim(content) |> String.split(":", parts: 2) do
              ["__cookie__", pass] -> pass
-             _ -> "ffwf"
+             _ ->
+               Logger.error("❌ Invalid Zebra cookie format at #{cookie_path}")
+               ""
            end
-
          _ ->
-           "ffwf"
+           Logger.error("❌ Could not read Zebra RPC cookie at #{cookie_path}")
+           ""
        end
      end).(),
-  vk_cpus: "0.2",
-  vk_mem: "2048M",
-  vk_runnner_image: "nighthawkapps/vkrunner",
   zcash_network: "mainnet"
