@@ -1,6 +1,5 @@
 defmodule ZcashExplorerWeb.RawMempoolLive do
   use Phoenix.LiveView, layout: false
-  import Phoenix.HTML
   import ZcashExplorerWeb.TransactionHelper
 
   @impl true
