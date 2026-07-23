@@ -236,8 +236,6 @@ You should get a block height back. If this fails, fix Zebra RPC / cookie path b
 | `/api/v1/blockchain-info` | JSON chain info |
 | `/api/v1/supply` | Supply / valuePools API |
 
-- Public Input, Public Output, and Δ Transparent on list views
-- Miner tag from coinbase (name/emoji) plus address on block pages
 - Mainnet and testnet
 
 ---
