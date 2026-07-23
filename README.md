@@ -14,6 +14,16 @@ Talks to a local **Zebra** (or zcashd) node over RPC.
 
 **Optional:** PostgreSQL (only if you use features that need Ecto; basic browsing works from RPC + cache alone)
 
+### Dependencies note
+
+This explorer uses a fork of [zcashex](https://github.com/dismad/zcashex) with **Ironwood**
+support in the transaction schema (`embeds_one :ironwood`).  
+`mix.exs` points at:
+
+```elixir
+{:zcashex, github: "dismad/zcashex", branch: "main"}
+```
+
 ---
 
 ## 1. System packages
