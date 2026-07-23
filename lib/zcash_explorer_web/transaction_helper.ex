@@ -116,10 +116,10 @@ defmodule ZcashExplorerWeb.TransactionHelper do
       is_coinbase ->
         "coinbase"
 
-      # Pure Sprout → Shielded (chip shows Sprout)
+      # Pure Sprout →  (chip shows Sprout)
       is_list(vjoinsplit) and vjoinsplit != [] and not has_transparent_out and
           length(vin) == 0 ->
-        "shielded"
+        ""
 
       length(vjoinsplit) > 0 ->
         "sprout"
@@ -131,7 +131,7 @@ defmodule ZcashExplorerWeb.TransactionHelper do
         "shielding"
 
       has_pool?(ironwood) ->
-        "shielded"
+        ""
 
       has_pool?(orchard) ->
         "shielded"
@@ -203,7 +203,7 @@ defmodule ZcashExplorerWeb.TransactionHelper do
 
       "shielded" ->
         raw(
-          ~S{<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-teal-400 text-gray-900 capitalize">Shielded</span>}
+          ~S{<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-400 text-gray-900 capitalize">Shielded</span>}
         )
 
       "sprout" ->
