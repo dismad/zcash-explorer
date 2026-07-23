@@ -14,10 +14,11 @@ defmodule ZcashExplorerWeb.HomeLive do
     <html lang="en">
       <head>
         <meta charset="UTF-8">
-        <meta http-equiv="X-UA-Compatible" content="IE=edge">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Zcash Explorer - Search the Zcash Blockchain</title>
-        <link rel="stylesheet" href="/assets/app.css">
+	  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+	  <meta name="csrf-token" content={Plug.CSRFProtection.get_csrf_token()} />
+	  <title>...</title>
+	  <link rel="stylesheet" href="/assets/app.css">
+	  <script defer phx-track-static type="text/javascript" src="/js/app.js"></script>
       </head>
       <body class="bg-gray-50 dark:bg-gray-900 pb-20">
         <!-- ===== TOP BANNER (Logo only - super clean) ===== -->
