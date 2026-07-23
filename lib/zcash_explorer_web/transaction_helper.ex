@@ -72,7 +72,7 @@ defmodule ZcashExplorerWeb.TransactionHelper do
 
   def pool_badge("ironwood") do
     raw(
-      ~S{<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium bg-teal-50 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300">Ironwood</span>}
+      ~S{<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium bg-orange-50 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300">Ironwood</span>}
     )
   end
 
@@ -165,7 +165,7 @@ defmodule ZcashExplorerWeb.TransactionHelper do
 
       "ironwood" ->
         raw(
-          ~S{<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-teal-500 text-gray-900 capitalize">Ironwood</span>}
+          ~S{<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-500 text-white capitalize">Ironwood</span>}
         )
 
       "orchard" ->
