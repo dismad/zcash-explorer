@@ -3,12 +3,20 @@ defmodule ZcashExplorerWeb.TransactionHelper do
 
   def tx_type(tx) when is_map(tx) do
     pre_computed = Map.get(tx, "type") || Map.get(tx, :type)
+    detected = detect_type(tx)
 
-    if pre_computed && pre_computed != "unknown" do
-      badge(pre_computed)
-    else
-      badge(detect_type(tx))
-    end
+    # Prefer live detection when precomputed is missing, unknown, or mixed
+    # (warmers often stamped "mixed" before Ironwood was recognized)
+    type =
+      cond do
+        is_binary(pre_computed) and pre_computed not in ["unknown", "mixed", ""] ->
+          pre_computed
+
+        true ->
+          detected
+      end
+
+    badge(type)
   end
 
   def tx_type(_), do: badge("unknown")
@@ -22,10 +30,10 @@ defmodule ZcashExplorerWeb.TransactionHelper do
 
     has_sapling = has_sapling?(tx)
 
-    orchard = Map.get(tx, "orchard") || Map.get(tx, :orchard)
+    orchard = pool_field(tx, :orchard)
     has_orchard = has_pool?(orchard)
 
-    ironwood = Map.get(tx, "ironwood") || Map.get(tx, :ironwood)
+    ironwood = pool_field(tx, :ironwood)
     has_ironwood = has_pool?(ironwood)
 
     list =
@@ -36,7 +44,6 @@ defmodule ZcashExplorerWeb.TransactionHelper do
       |> then(fn l -> if has_ironwood, do: ["ironwood" | l], else: l end)
       |> Enum.reverse()
 
-    # Coinbase always has transparent outputs — hide the redundant chip
     if is_coinbase?(vin) do
       List.delete(list, "transparent")
     else
@@ -82,8 +89,8 @@ defmodule ZcashExplorerWeb.TransactionHelper do
     vin = Map.get(tx, "vin") || Map.get(tx, :vin) || []
     vout = Map.get(tx, "vout") || Map.get(tx, :vout) || []
     vjoinsplit = Map.get(tx, "vjoinsplit") || Map.get(tx, :vjoinsplit) || []
-    orchard = Map.get(tx, "orchard") || Map.get(tx, :orchard)
-    ironwood = Map.get(tx, "ironwood") || Map.get(tx, :ironwood)
+    orchard = pool_field(tx, :orchard)
+    ironwood = pool_field(tx, :ironwood)
 
     value_zat = Map.get(tx, "valueBalanceZat") || Map.get(tx, :valueBalanceZat) || 0
     orchard_zat = get_pool_zat(orchard)
@@ -99,6 +106,7 @@ defmodule ZcashExplorerWeb.TransactionHelper do
       length(vjoinsplit) > 0 ->
         "sprout"
 
+      # Only deshielding when value leaves a pool AND there is a transparent output
       (value_zat > 0 || orchard_zat > 0 || ironwood_zat > 0) && has_transparent_out ->
         "deshielding"
 
@@ -117,16 +125,30 @@ defmodule ZcashExplorerWeb.TransactionHelper do
       length(vin) > 0 && length(vout) > 0 ->
         "transparent"
 
+      # Last resort: non-nil pool object (covers stripped action lists)
+      is_map(ironwood) and map_size(ironwood) > 0 ->
+        "ironwood"
+
+      is_map(orchard) and map_size(orchard) > 0 and has_pool?(orchard) ->
+        "orchard"
+
       true ->
         "mixed"
     end
   end
 
+  # Accept atom or string keys; works on raw RPC maps and structs
+  defp pool_field(tx, key) when is_atom(key) do
+    Map.get(tx, key) || Map.get(tx, Atom.to_string(key))
+  end
+
   defp get_pool_zat(nil), do: 0
 
-  defp get_pool_zat(pool) do
+  defp get_pool_zat(pool) when is_map(pool) do
     Map.get(pool, "valueBalanceZat") || Map.get(pool, :valueBalanceZat) || 0
   end
+
+  defp get_pool_zat(_), do: 0
 
   defp is_coinbase?(vin) when is_list(vin) do
     Enum.any?(vin, fn v -> Map.get(v, "coinbase") || Map.get(v, :coinbase) end)
@@ -136,13 +158,20 @@ defmodule ZcashExplorerWeb.TransactionHelper do
 
   defp has_pool?(nil), do: false
 
-  defp has_pool?(pool) do
-    actions = Map.get(pool, "actions") || Map.get(pool, :actions)
-    is_list(actions) && length(actions) > 0
+  defp has_pool?(pool) when is_map(pool) do
+    actions = Map.get(pool, "actions") || Map.get(pool, :actions) || []
+    n_actions = Map.get(pool, "nActions") || Map.get(pool, :nActions) || 0
+    zat = Map.get(pool, "valueBalanceZat") || Map.get(pool, :valueBalanceZat)
+
+    (is_list(actions) and actions != []) or
+      (is_integer(n_actions) and n_actions > 0) or
+      is_integer(zat)
   end
 
+  defp has_pool?(_), do: false
+
   defp has_sapling?(tx) do
-    (Map.get(tx, "vShieldedSpend") || Map.get(tx, :vShieldedSpend) || []) != [] ||
+    (Map.get(tx, "vShieldedSpend") || Map.get(tx, :vShieldedSpend) || []) != [] or
       (Map.get(tx, "vShieldedOutput") || Map.get(tx, :vShieldedOutput) || []) != []
   end
 
