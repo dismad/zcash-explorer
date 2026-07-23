@@ -80,6 +80,3 @@ if (themeToggleDarkIcon && themeToggleLightIcon && themeToggleBtn) {
     }
   })
 }
-=======
-}
->>>>>>> refs/remotes/origin/main
