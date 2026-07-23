@@ -134,6 +134,7 @@ For **testnet**, use your testnet cookie/port and set the network in config.
 ## 5. Install dependencies and build assets
 
 ```bash
+set -a && source .env && set +a
 mix deps.get
 
 cd assets
