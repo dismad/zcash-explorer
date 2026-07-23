@@ -79,4 +79,8 @@ if (themeToggleDarkIcon && themeToggleLightIcon && themeToggleBtn) {
       }
     }
   })
+<<<<<<< HEAD
 }
+=======
+}
+>>>>>>> refs/remotes/origin/main
