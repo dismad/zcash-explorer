@@ -2,13 +2,13 @@ defmodule ZcashExplorerWeb.TransactionHelper do
   import Phoenix.HTML
 
   @pure_shielded_pools ["ironwood", "orchard", "sapling", "sprout"]
+  @priority_types ["coinbase", "shielding", "deshielding", "transparent"]
 
   def tx_type(tx) when is_map(tx) do
     pools = Map.get(tx, "pools") || Map.get(tx, :pools) || pool_list(tx)
     has_shielded_pool? = Enum.any?(pools, &(&1 in @pure_shielded_pools))
     has_transparent? = "transparent" in pools
 
-    # Warmer may store a string or pre-rendered HTML {:safe, _} — only trust binaries
     pre_computed = Map.get(tx, "type") || Map.get(tx, :type)
     pre_computed = if is_binary(pre_computed), do: pre_computed, else: nil
 
@@ -16,12 +16,22 @@ defmodule ZcashExplorerWeb.TransactionHelper do
 
     type =
       cond do
-        # Cache row: has shielded pool chip data, no transparent → Shielded
-        has_shielded_pool? and not has_transparent? and
-            detected in ["shielded", "mixed", "unknown"] ->
+        # 1) Strong classifications from live detection
+        detected in @priority_types ->
+          detected
+
+        # 2) Warmer stored a strong type string
+        is_binary(pre_computed) and pre_computed in @priority_types ->
+          pre_computed
+
+        # 3) Pure shielded pool (no transparent) — including cache-only rows
+        has_shielded_pool? and not has_transparent? ->
           "shielded"
 
         is_binary(pre_computed) and pre_computed in @pure_shielded_pools ->
+          "shielded"
+
+        detected == "shielded" ->
           "shielded"
 
         is_binary(pre_computed) and pre_computed not in ["unknown", "mixed", ""] ->
@@ -62,7 +72,7 @@ defmodule ZcashExplorerWeb.TransactionHelper do
       |> then(fn l -> if has_ironwood, do: ["ironwood" | l], else: l end)
       |> Enum.reverse()
 
-    if is_coinbase?(vin) do
+    if is_coinbase?(tx) do
       List.delete(list, "transparent")
     else
       list
@@ -120,15 +130,19 @@ defmodule ZcashExplorerWeb.TransactionHelper do
     orchard_zat = get_pool_zat(orchard)
     ironwood_zat = get_pool_zat(ironwood)
 
-    is_coinbase = is_coinbase?(vin)
     has_transparent_out = length(vout) > 0
-
-    # Cache-only rows may only have "pools"
     pools = Map.get(tx, "pools") || Map.get(tx, :pools) || []
 
+    # Warmer may stamp type as a plain string
+    stored = Map.get(tx, "type") || Map.get(tx, :type)
+    stored = if is_binary(stored), do: stored, else: nil
+
     cond do
-      is_coinbase ->
+      is_coinbase?(tx) or stored == "coinbase" ->
         "coinbase"
+
+      stored in ["shielding", "deshielding", "transparent"] ->
+        stored
 
       is_list(vjoinsplit) and vjoinsplit != [] and not has_transparent_out and length(vin) == 0 ->
         "shielded"
@@ -151,7 +165,6 @@ defmodule ZcashExplorerWeb.TransactionHelper do
       has_sapling?(tx) ->
         "shielded"
 
-      # Cache warmer only stored pool names
       Enum.any?(pools, &(&1 in @pure_shielded_pools)) and "transparent" not in pools ->
         "shielded"
 
@@ -178,8 +191,15 @@ defmodule ZcashExplorerWeb.TransactionHelper do
 
   defp get_pool_zat(_), do: 0
 
-  defp is_coinbase?(vin) when is_list(vin) do
-    Enum.any?(vin, fn v -> Map.get(v, "coinbase") || Map.get(v, :coinbase) end)
+  # Works on full RPC maps and thin cache rows
+  defp is_coinbase?(tx) when is_map(tx) do
+    vin = Map.get(tx, "vin") || Map.get(tx, :vin) || []
+
+    Enum.any?(vin, fn v ->
+      is_map(v) and (Map.get(v, "coinbase") != nil or Map.get(v, :coinbase) != nil)
+    end) or
+      Map.get(tx, "is_coinbase") == true or
+      Map.get(tx, :is_coinbase) == true
   end
 
   defp is_coinbase?(_), do: false
@@ -212,12 +232,12 @@ defmodule ZcashExplorerWeb.TransactionHelper do
 
       "shielding" ->
         raw(
-          ~S{<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gradient-to-r from-amber-200 to-emerald-400 text-gray-900 capitalize">Shielding</span>}
+          ~S{<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gradient-to-r from-amber-200 to-emerald-400 text-gray-900 capitalize">Shielding (T-Z)</span>}
         )
 
       "deshielding" ->
         raw(
-          ~S{<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gradient-to-r from-emerald-400 to-amber-200 text-gray-900 capitalize">Deshielding</span>}
+          ~S{<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gradient-to-r from-emerald-400 to-amber-200 text-gray-900 capitalize">Deshielding (Z-T)</span>}
         )
 
       "shielded" ->
