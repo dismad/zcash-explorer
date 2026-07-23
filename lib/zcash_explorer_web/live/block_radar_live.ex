@@ -21,102 +21,101 @@ defmodule ZcashExplorerWeb.BlockRadarLive do
      |> assign(:tick_count, 0)}
   end
 
-def handle_info(:tick, socket) do
-  Process.send_after(self(), :tick, @tick_interval)
+  def handle_info(:tick, socket) do
+    Process.send_after(self(), :tick, @tick_interval)
 
-  tick_count = socket.assigns.tick_count + 1
+    tick_count = socket.assigns.tick_count + 1
 
-  socket =
-    if rem(tick_count, @refresh_every) == 0 do
-      refresh_blocks(socket)
-    else
-      socket
+    socket =
+      if rem(tick_count, @refresh_every) == 0 do
+        refresh_blocks(socket)
+      else
+        socket
+      end
+
+    {:noreply,
+     socket
+     |> assign(:current_time, DateTime.utc_now())
+     |> assign(:tick_count, tick_count)}
+  end
+
+  defp refresh_blocks(socket) do
+    chain_tip =
+      case Zcashex.getblockcount() do
+        {:ok, n} when is_integer(n) -> n
+        _ -> nil
+      end
+
+    cond do
+      is_nil(chain_tip) ->
+        socket
+
+      chain_tip == socket.assigns.tip_height ->
+        socket
+
+      true ->
+        blocks = load_blocks_for_tip(chain_tip, socket.assigns.blocks)
+
+        socket
+        |> assign(:blocks, blocks)
+        |> assign(:tip_height, tip_height(blocks) || chain_tip)
+        |> assign(:rolling_avg_size, calculate_rolling_avg_size(blocks))
     end
+  end
 
-  {:noreply,
-   socket
-   |> assign(:current_time, DateTime.utc_now())
-   |> assign(:tick_count, tick_count)}
-end
+  defp load_blocks_for_tip(chain_tip, previous_blocks) do
+    cached = get_recent_blocks()
+    cached_tip = tip_height(cached)
 
-defp refresh_blocks(socket) do
-  chain_tip =
-    case Zcashex.getblockcount() do
-      {:ok, n} when is_integer(n) -> n
-      _ -> nil
+    cond do
+      cached_tip == chain_tip and cached != [] ->
+        cached
+
+      true ->
+        known = Map.new(previous_blocks, fn b -> {b["height"], b} end)
+        start_h = max(chain_tip - 143, 0)
+
+        Enum.map(start_h..chain_tip, fn h ->
+          case Map.get(known, h) do
+            nil -> fetch_block_summary(h)
+            b -> b
+          end
+        end)
+        |> Enum.reject(&is_nil/1)
+        |> Enum.sort_by(& &1["height"], :desc)
     end
-
-  cond do
-    is_nil(chain_tip) ->
-      socket
-
-    chain_tip == socket.assigns.tip_height ->
-      socket
-
-    true ->
-      blocks = load_blocks_for_tip(chain_tip, socket.assigns.blocks)
-
-      socket
-      |> assign(:blocks, blocks)
-      |> assign(:tip_height, tip_height(blocks) || chain_tip)
-      |> assign(:rolling_avg_size, calculate_rolling_avg_size(blocks))
   end
-end
 
-defp load_blocks_for_tip(chain_tip, previous_blocks) do
-  cached = get_recent_blocks()
-  cached_tip = tip_height(cached)
+  defp fetch_block_summary(height) do
+    case Zcashex.getblock(height, 1) do
+      {:ok, block} when is_map(block) ->
+        %{
+          "height" => block["height"] || height,
+          "size" => block["size"] || 0,
+          "hash" => block["hash"],
+          "time" => format_block_time(block["time"]),
+          "tx_count" => length(block["tx"] || [])
+        }
 
-  cond do
-    cached_tip == chain_tip and cached != [] ->
-      cached
-
-    true ->
-      # Cache behind — build from previous list + fetch missing tip blocks
-      known = Map.new(previous_blocks, fn b -> {b["height"], b} end)
-
-      start_h = max(chain_tip - 143, 0) # ~12x12 grid
-
-      Enum.map(start_h..chain_tip, fn h ->
-        case Map.get(known, h) do
-          nil -> fetch_block_summary(h)
-          b -> b
-        end
-      end)
-      |> Enum.reject(&is_nil/1)
-      |> Enum.sort_by(& &1["height"], :desc)
+      _ ->
+        nil
+    end
   end
-end
 
-defp fetch_block_summary(height) do
-  case Zcashex.getblock(height, 1) do
-    {:ok, block} when is_map(block) ->
-      %{
-        "height" => block["height"] || height,
-        "size" => block["size"] || 0,
-        "hash" => block["hash"],
-        "time" => format_block_time(block["time"]),
-        "tx_count" => length(block["tx"] || [])
-      }
-
-    _ ->
-      nil
+  defp format_block_time(unix) when is_integer(unix) do
+    case DateTime.from_unix(unix) do
+      {:ok, dt} -> DateTime.to_iso8601(dt)
+      _ -> ""
+    end
   end
-end
 
-defp format_block_time(unix) when is_integer(unix) do
-  case DateTime.from_unix(unix) do
-    {:ok, dt} -> DateTime.to_iso8601(dt)
-    _ -> ""
-  end
-end
-
-defp format_block_time(_), do: ""
+  defp format_block_time(_), do: ""
 
   defp tip_height([]), do: nil
   defp tip_height([%{"height" => h} | _]), do: h
   defp tip_height([%{height: h} | _]), do: h
   defp tip_height(_), do: nil
+
   defp get_recent_blocks do
     case Cachex.get(:app_cache, "block_cache") do
       {:ok, blocks} when is_list(blocks) -> blocks
@@ -148,6 +147,7 @@ defp format_block_time(_), do: ""
       _ -> 0
     end
   end
+
   defp parse_time(_), do: 0
 
   defp normalized_size(block, rolling_avg_size) do
@@ -156,15 +156,15 @@ defp format_block_time(_), do: ""
 
   defp dbz_to_color(dbz) do
     cond do
-      dbz < 5   -> "#4b0082"
-      dbz < 15  -> "#0066cc"
-      dbz < 25  -> "#00aaff"
-      dbz < 35  -> "#00cc88"
-      dbz < 45  -> "#88ee00"
-      dbz < 55  -> "#ffee00"
-      dbz < 65  -> "#ffbb00"
-      dbz < 75  -> "#ff6600"
-      true      -> "#ff2200"
+      dbz < 5 -> "#4b0082"
+      dbz < 15 -> "#0066cc"
+      dbz < 25 -> "#00aaff"
+      dbz < 35 -> "#00cc88"
+      dbz < 45 -> "#88ee00"
+      dbz < 55 -> "#ffee00"
+      dbz < 65 -> "#ffbb00"
+      dbz < 75 -> "#ff6600"
+      true -> "#ff2200"
     end
   end
 
@@ -173,14 +173,12 @@ defp format_block_time(_), do: ""
     <!DOCTYPE html>
     <html lang="en">
       <head>
-        <head>
-	  <meta charset="UTF-8">
-	  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-	  <meta name="csrf-token" content={Plug.CSRFProtection.get_csrf_token()} />
-	  <title>Block Radar • Zcash Explorer</title>
-	  <link rel="stylesheet" href="/assets/app.css">
-	  <script defer phx-track-static type="text/javascript" src="/js/app.js"></script>
-	</head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta name="csrf-token" content={Plug.CSRFProtection.get_csrf_token()} />
+        <title>Block Radar • Zcash Explorer</title>
+        <link rel="stylesheet" href="/assets/app.css">
+        <script defer phx-track-static type="text/javascript" src="/js/app.js"></script>
       </head>
       <body class="bg-zinc-950 text-white font-mono">
         <header class="bg-zinc-900 border-b border-zinc-800 sticky top-0 z-50">
@@ -189,7 +187,6 @@ defp format_block_time(_), do: ""
               <span class="text-2xl">📡</span>
               <h1 class="text-2xl font-semibold tracking-tighter">Block Radar</h1>
             </div>
-
             <div class="flex items-center gap-x-3 text-sm">
               <%= if @blocks != [] do %>
                 <% latest = List.first(@blocks)
@@ -207,13 +204,11 @@ defp format_block_time(_), do: ""
                 <span class="text-zinc-400">Waiting for blocks...</span>
               <% end %>
             </div>
-
             <a href="/" class="text-zinc-400 hover:text-white flex items-center gap-1 text-sm">
               ← Back to Explorer
             </a>
           </div>
         </header>
-
         <div class="max-w-7xl mx-auto p-6">
           <div class="max-w-[1150px] mx-auto">
             <!-- Main dBZ Legend -->
@@ -230,31 +225,29 @@ defp format_block_time(_), do: ""
                 Main grid: Recent blocks • Color = throughput reflectivity (bigger + faster = stronger echo)
               </p>
             </div>
-
             <div class="flex flex-col lg:flex-row gap-8 items-start justify-center">
               <!-- Main Grid -->
               <div class="flex-1 max-w-[980px]">
                 <div class="relative bg-zinc-950 border-2 border-zinc-800 rounded-3xl pt-5 pb-3 px-4 shadow-2xl" style="aspect-ratio: 1 / 1;">
                   <div class="absolute inset-0 bg-[repeating-linear-gradient(90deg,#27272a_0,#27272a_1px,transparent_1px,transparent_12px)] opacity-30 pointer-events-none"></div>
                   <div class="absolute inset-0 bg-[repeating-linear-gradient(180deg,#27272a_0,#27272a_1px,transparent_1px,transparent_12px)] opacity-30 pointer-events-none"></div>
-
                   <div class="grid grid-cols-12 gap-px h-full bg-black/80 rounded-2xl overflow-hidden">
                     <%= for {block, idx} <- Enum.with_index(@blocks) do %>
                       <% prev = Enum.at(@blocks, idx + 1) || block
                          reflectivity = compute_reflectivity(block, prev, @rolling_avg_size)
                          size_norm = normalized_size(block, @rolling_avg_size)
                          is_most_recent = idx == 0 %>
-
                       <a
                         href={"/blocks/#{block["hash"]}"}
                         class="relative aspect-square flex items-center justify-center rounded border border-zinc-900/30 transition-all hover:brightness-110 hover:ring-1 hover:ring-cyan-400/30 overflow-hidden"
                         style={"background-color: #{dbz_to_color(reflectivity)};
                                box-shadow: inset 0 0 #{round(4 + size_norm * 8)}px #{dbz_to_color(reflectivity)}44;
                                transform: scale(#{1.0 + size_norm * 0.08});"}
-                        title={"Block #{block["height"]} • #{block["tx_count"] || length(block["tx"] || [])} txs • #{round(block["size"]/1024)} KB • Δt #{round(max(parse_time(block["time"]) - parse_time(prev["time"]), 1))}s • #{round(reflectivity)} dBZ"}>
-
-                        <span class="absolute top-1.5 left-1.5 text-[9px] font-mono text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)] z-10 leading-none"><%= block["height"] %></span>
-
+                        title={"Block #{block["height"]} • #{block["tx_count"] || length(block["tx"] || [])} txs • #{round(block["size"]/1024)} KB • Δt #{round(max(parse_time(block["time"]) - parse_time(prev["time"]), 1))}s • #{round(reflectivity)} dBZ"}
+                      >
+                        <span class="absolute top-1.5 left-1.5 text-[9px] font-mono text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)] z-10 leading-none">
+                          <%= block["height"] %>
+                        </span>
                         <%= if is_most_recent do %>
                           <div class="absolute inset-0 bg-gradient-to-r from-transparent via-cyan-300/30 to-transparent animate-[sweep_3s_linear_infinite]"></div>
                         <% end %>
@@ -262,13 +255,13 @@ defp format_block_time(_), do: ""
                     <% end %>
                   </div>
                 </div>
-                <p class="text-center text-xs text-zinc-500 mt-3">Most recent (top-left) → oldest • Auto-refreshes every 15s</p>
+                <p class="text-center text-xs text-zinc-500 mt-3">
+                  Most recent (top-left) → oldest • Checks for new blocks every 5s
+                </p>
               </div>
-
               <!-- Rain Column -->
               <div class="flex flex-col items-center gap-3">
                 <div class="text-xs text-zinc-400 text-center tracking-widest">Rain visualization (Last 25 blocks)</div>
-
                 <div class="flex items-start gap-4">
                   <div class="relative bg-zinc-950 border border-zinc-800 rounded-3xl h-[520px] overflow-hidden shadow-2xl w-20 flex-shrink-0">
                     <div class="absolute inset-0 flex flex-col justify-end items-center gap-3 p-3">
@@ -281,13 +274,13 @@ defp format_block_time(_), do: ""
                           style={"width: #{9 + size_norm * 13}px;
                                  height: #{16 + size_norm * 11}px;
                                  background-color: #{dbz_to_color(reflectivity)};
-                                 animation-delay: #{rem(:erlang.unique_integer([:positive]), 6000)}ms;"}>
+                                 animation-delay: #{rem(:erlang.unique_integer([:positive]), 6000)}ms;"}
+                        >
                           <%= block["height"] %>
                         </div>
                       <% end %>
                     </div>
                   </div>
-
                   <div class="text-[10px] text-zinc-500 leading-tight max-w-[160px]">
                     Color = the block's reflectivity (exactly the same dBZ color used in the main grid — brighter/right-side colors mean bigger block + faster next block = stronger echo)<br><br>
                     Size of the drop = relative block size (larger blocks appear as bigger/fatter drops)
@@ -295,7 +288,6 @@ defp format_block_time(_), do: ""
                 </div>
               </div>
             </div>
-
             <!-- Table -->
             <div class="mt-12 max-w-[980px]">
               <details open>
@@ -307,7 +299,6 @@ defp format_block_time(_), do: ""
                   The radar combines two variables into one “reflectivity” value: <strong>throughput = block size ÷ time since previous block</strong>.<br>
                   This is normalized against the network average and mapped to a dBZ-like scale (logarithmic, like real weather radar).
                 </p>
-
                 <div class="overflow-x-auto">
                   <table class="w-full text-sm border border-zinc-700 rounded-2xl overflow-hidden">
                     <thead class="bg-zinc-900">
@@ -374,7 +365,6 @@ defp format_block_time(_), do: ""
             </div>
           </div>
         </div>
-
         <style>
           @keyframes fall { to { transform: translateY(520px); opacity: 0; } }
           .raindrop {

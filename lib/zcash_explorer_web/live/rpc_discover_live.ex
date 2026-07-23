@@ -66,7 +66,7 @@ defmodule ZcashExplorerWeb.RpcDiscoverLive do
         <title><%= @page_title %></title>
         <link rel="stylesheet" href="/assets/app.css">
         <meta name="csrf-token" content={Phoenix.Controller.get_csrf_token()}>
-        <script src="/js/app.js"></script>
+        <script defer phx-track-static type="text/javascript" src="/js/app.js"></script>
       </head>
       <body class="bg-gray-50 dark:bg-gray-900 flex flex-col min-h-screen">
 
@@ -678,6 +678,10 @@ defmodule ZcashExplorerWeb.RpcDiscoverLive do
   end
 
   # Helper that redacts all IP addresses in getpeerinfo output
+  
+  defp get_dynamic_live_result(_), do: nil
+
+  # Keep helpers AFTER all get_dynamic_live_result clauses
   defp sanitize_getpeerinfo(peers) when is_list(peers) do
     Enum.map(peers, fn peer ->
       Map.new(peer, fn
@@ -689,9 +693,8 @@ defmodule ZcashExplorerWeb.RpcDiscoverLive do
     end)
   end
 
-  defp get_dynamic_live_result(_), do: nil
-
   # ==================== EVENT HANDLERS ====================
+
   def handle_event("select_method", %{"name" => name}, socket) do
     method = Enum.find(socket.assigns.methods, &(&1["name"] == name))
 
@@ -721,31 +724,39 @@ defmodule ZcashExplorerWeb.RpcDiscoverLive do
     {:noreply, assign(socket, methods: filtered)}
   end
 
-  # Icon and tag helpers (unchanged)
   defp method_icon(assigns) do
-    tags = assigns.tags || []
-    icon = cond do
-      Enum.any?(tags, &(&1 == "blockchain")) -> "📦"
-      Enum.any?(tags, &(&1 == "address"))    -> "🏠"
-      Enum.any?(tags, &(&1 == "transaction")) -> "🔄"
-      Enum.any?(tags, &(&1 == "mining"))     -> "⛏️"
-      Enum.any?(tags, &(&1 == "network"))    -> "🌐"
-      Enum.any?(tags, &(&1 == "wallet"))     -> "👛"
-      Enum.any?(tags, &(&1 == "control"))    -> "⚙️"
-      Enum.any?(tags, &(&1 == "util"))       -> "🔧"
-      true                                   -> "📋"
-    end
+    tags = assigns[:tags] || []
+
+    icon =
+      cond do
+        Enum.any?(tags, &(&1 == "blockchain")) -> "📦"
+        Enum.any?(tags, &(&1 == "address")) -> "🏠"
+        Enum.any?(tags, &(&1 == "transaction")) -> "🔄"
+        Enum.any?(tags, &(&1 == "mining")) -> "⛏️"
+        Enum.any?(tags, &(&1 == "network")) -> "🌐"
+        Enum.any?(tags, &(&1 == "wallet")) -> "👛"
+        Enum.any?(tags, &(&1 == "control")) -> "⚙️"
+        Enum.any?(tags, &(&1 == "util")) -> "🔧"
+        true -> "📋"
+      end
+
     size_class = if assigns[:size] == "lg", do: "text-4xl", else: "text-2xl"
+
+    assigns =
+      assigns
+      |> assign(:icon, icon)
+      |> assign(:size_class, size_class)
+
     ~H"""
-    <div class={"w-10 h-10 flex items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-100 to-purple-100 dark:from-indigo-900 dark:to-purple-900 flex-shrink-0 " <> size_class}>
-      <%= icon %>
+    <div class={"w-10 h-10 flex items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-100 to-purple-100 dark:from-indigo-900 dark:to-purple-900 flex-shrink-0 " <> @size_class}>
+      <%= @icon %>
     </div>
     """
   end
 
   defp method_tags(assigns) do
     ~H"""
-    <div class={"flex gap-1.5 flex-wrap " <> if assigns[:large], do: "mb-6", else: ""}>
+    <div class={"flex gap-1.5 flex-wrap " <> if(@large, do: "mb-6", else: "")}>
       <%= for tag <- @tags || [] do %>
         <span class={"inline-flex items-center px-3 py-1 text-xs font-medium rounded-3xl " <> tag_color(tag)}>
           <%= tag %>
@@ -758,14 +769,14 @@ defmodule ZcashExplorerWeb.RpcDiscoverLive do
   defp tag_color(tag) do
     case tag do
       "blockchain" -> "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300"
-      "address"    -> "bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300"
-      "transaction"-> "bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300"
-      "mining"     -> "bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300"
-      "network"    -> "bg-cyan-100 text-cyan-700 dark:bg-cyan-900 dark:text-cyan-300"
-      "wallet"     -> "bg-pink-100 text-pink-700 dark:bg-pink-900 dark:text-pink-300"
-      "control"    -> "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300"
-      "util"       -> "bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300"
-      _            -> "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300"
+      "address" -> "bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300"
+      "transaction" -> "bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300"
+      "mining" -> "bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300"
+      "network" -> "bg-cyan-100 text-cyan-700 dark:bg-cyan-900 dark:text-cyan-300"
+      "wallet" -> "bg-pink-100 text-pink-700 dark:bg-pink-900 dark:text-pink-300"
+      "control" -> "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300"
+      "util" -> "bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300"
+      _ -> "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300"
     end
   end
 end

@@ -67,8 +67,10 @@ defmodule ZcashExplorerWeb.BlockLive do
         <meta charset="UTF-8">
         <meta http-equiv="X-UA-Compatible" content="IE=edge">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta name="csrf-token" content={Plug.CSRFProtection.get_csrf_token()} />
         <title>Block <%= @hash %> - Zcash Explorer</title>
         <link rel="stylesheet" href="/assets/app.css">
+        <script defer phx-track-static type="text/javascript" src="/js/app.js"></script>
       </head>
       <body class="bg-gray-50 dark:bg-gray-900">
         <%= if @standalone do %>
@@ -85,12 +87,10 @@ defmodule ZcashExplorerWeb.BlockLive do
             </div>
           </header>
         <% end %>
-
         <div class="mx-auto px-3 sm:px-4 py-4 sm:py-8">
           <h1 class="text-lg sm:text-2xl font-semibold mb-4 sm:mb-6">
             Details for the Zcash block #<%= @block && @block.height %>
           </h1>
-
           <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-8">
             <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-4 sm:p-6">
               <dl class="grid grid-cols-2 gap-x-4 sm:gap-x-8 gap-y-3 sm:gap-y-6 text-sm">
@@ -109,19 +109,19 @@ defmodule ZcashExplorerWeb.BlockLive do
                   <dt class="text-gray-500">Height</dt>
                   <dd class="font-semibold mt-1"><%= @block && @block.height %></dd>
                 </div>
-               <div class="col-span-2 sm:col-span-1">
-		  <dt class="text-gray-500">Miner</dt>
-		  <dd class="mt-1 space-y-0.5">
-		    <%= if name = miner_name(@block) do %>
-		      <div class="font-semibold text-sm text-gray-900 dark:text-gray-100">
-			<%= name %>
-		      </div>
-		    <% end %>
-		    <div class="font-mono break-all text-xs sm:text-sm text-gray-600 dark:text-gray-300">
-		      <%= miner_address(@block) %>
-		    </div>
-		  </dd>
-		</div>
+                <div class="col-span-2 sm:col-span-1">
+                  <dt class="text-gray-500">Miner</dt>
+                  <dd class="mt-1 space-y-0.5">
+                    <%= if name = miner_name(@block) do %>
+                      <div class="font-semibold text-sm text-gray-900 dark:text-gray-100">
+                        <%= name %>
+                      </div>
+                    <% end %>
+                    <div class="font-mono break-all text-xs sm:text-sm text-gray-600 dark:text-gray-300">
+                      <%= miner_address(@block) %>
+                    </div>
+                  </dd>
+                </div>
                 <div>
                   <dt class="text-gray-500">Input count</dt>
                   <dd class="mt-1"><%= input_count(@block) %></dd>
@@ -144,7 +144,6 @@ defmodule ZcashExplorerWeb.BlockLive do
                 </div>
               </dl>
             </div>
-
             <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-4 sm:p-6">
               <h3 class="font-semibold mb-3 sm:mb-4">Technical Details</h3>
               <dl class="space-y-2.5 sm:space-y-4 text-sm">
@@ -183,11 +182,9 @@ defmodule ZcashExplorerWeb.BlockLive do
               </dl>
             </div>
           </div>
-
           <h2 class="text-base sm:text-lg font-semibold mt-6 sm:mt-10 mb-3 sm:mb-4">
             Transactions included in this block
           </h2>
-
           <div class="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden">
             <div class="overflow-x-auto">
               <table class="w-full text-xs sm:text-sm min-w-[640px]">
@@ -243,73 +240,69 @@ defmodule ZcashExplorerWeb.BlockLive do
 
   # ── Helpers ──────────────────────────────────────────────────────────────
 
-defp miner_name(nil), do: nil
+  defp miner_name(nil), do: nil
 
-defp miner_name(block) do
-  coinbase_hex = get_coinbase_hex(block)
-  extract_miner_tag(coinbase_hex)
-end
+  defp miner_name(block) do
+    coinbase_hex = get_coinbase_hex(block)
+    extract_miner_tag(coinbase_hex)
+  end
 
-defp get_coinbase_hex(block) do
-  tx = List.first(block.tx || [])
+  defp get_coinbase_hex(block) do
+    tx = List.first(block.tx || [])
 
-  vin =
+    vin =
+      cond do
+        is_map(tx) and Map.has_key?(tx, :vin) -> List.first(tx.vin || [])
+        is_map(tx) and Map.has_key?(tx, "vin") -> List.first(tx["vin"] || [])
+        true -> nil
+      end
+
     cond do
-      is_map(tx) and Map.has_key?(tx, :vin) -> List.first(tx.vin || [])
-      is_map(tx) and Map.has_key?(tx, "vin") -> List.first(tx["vin"] || [])
+      is_nil(vin) -> nil
+      is_map(vin) -> Map.get(vin, :coinbase) || Map.get(vin, "coinbase")
       true -> nil
     end
-
-  cond do
-    is_nil(vin) -> nil
-    is_map(vin) -> Map.get(vin, :coinbase) || Map.get(vin, "coinbase")
-    true -> nil
   end
-end
 
-defp extract_miner_tag(nil), do: nil
-defp extract_miner_tag(""), do: nil
+  defp extract_miner_tag(nil), do: nil
+  defp extract_miner_tag(""), do: nil
 
-defp extract_miner_tag(hex) when is_binary(hex) do
-  hex = String.replace(hex, ~r/[^0-9a-fA-F]/, "")
+  defp extract_miner_tag(hex) when is_binary(hex) do
+    hex = String.replace(hex, ~r/[^0-9a-fA-F]/, "")
 
-  case Base.decode16(hex, case: :mixed) do
-    {:ok, bin} ->
-      bin
-      |> :binary.bin_to_list()
-      # group into runs of printable ASCII or high bytes (UTF-8)
-      |> Enum.chunk_by(fn b -> (b >= 32 and b <= 126) or b >= 0x80 end)
-      |> Enum.filter(fn
-        # ASCII run, at least 3 chars
-        [b | _] = chunk when b >= 32 and b <= 126 -> length(chunk) >= 3
-        # high-byte run (possible UTF-8), keep if it decodes
-        [b | _] = chunk when b >= 0x80 -> length(chunk) >= 1
-        _ -> false
-      end)
-      |> Enum.map(fn chunk ->
-        bytes = :binary.list_to_bin(chunk)
+    case Base.decode16(hex, case: :mixed) do
+      {:ok, bin} ->
+        bin
+        |> :binary.bin_to_list()
+        |> Enum.chunk_by(fn b -> (b >= 32 and b <= 126) or b >= 0x80 end)
+        |> Enum.filter(fn
+          [b | _] = chunk when b >= 32 and b <= 126 -> length(chunk) >= 3
+          [b | _] = chunk when b >= 0x80 -> length(chunk) >= 1
+          _ -> false
+        end)
+        |> Enum.map(fn chunk ->
+          bytes = :binary.list_to_bin(chunk)
 
-        cond do
-          String.valid?(bytes) ->
-            bytes
+          cond do
+            String.valid?(bytes) ->
+              bytes
 
-          true ->
-            # keep printable ASCII only from messy chunks
-            chunk
-            |> Enum.filter(&(&1 >= 32 and &1 <= 126))
-            |> List.to_string()
-        end
-      end)
-      |> Enum.map(&String.trim/1)
-      |> Enum.reject(fn s ->
-        s == "" or Regex.match?(~r/^\d+$/, s)
-      end)
-      |> List.last()
+            true ->
+              chunk
+              |> Enum.filter(&(&1 >= 32 and &1 <= 126))
+              |> List.to_string()
+          end
+        end)
+        |> Enum.map(&String.trim/1)
+        |> Enum.reject(fn s ->
+          s == "" or Regex.match?(~r/^\d+$/, s)
+        end)
+        |> List.last()
 
-    _ ->
-      nil
+      _ ->
+        nil
+    end
   end
-end
 
   defp collect_prev_txids(block_txs) do
     block_txs
@@ -334,10 +327,12 @@ end
   end
 
   defp input_count(nil), do: 0
+
   defp input_count(block),
     do: Enum.reduce(block.tx || [], 0, fn tx, acc -> acc + length(tx.vin || []) end)
 
   defp output_count(nil), do: 0
+
   defp output_count(block),
     do: Enum.reduce(block.tx || [], 0, fn tx, acc -> acc + length(tx.vout || []) end)
 
@@ -388,8 +383,6 @@ end
     vin = tx.vin || []
     vin != [] and (Map.get(hd(vin), :coinbase) != nil or Map.get(hd(vin), "coinbase") != nil)
   end
-
-  defp format_delta(nil, _), do: "0.00000000"
 
   defp format_delta(n, "fee") when is_number(n),
     do: :erlang.float_to_binary(abs(n) * 1.0, decimals: 8)

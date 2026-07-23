@@ -10,37 +10,42 @@ defmodule ZcashExplorerWeb.RecentTransactionsLive do
 
     if connected?(socket), do: Process.send_after(self(), :update, 1000)
 
-    case Cachex.get(:app_cache, "transaction_cache") do
-      {:ok, info} ->
-        {:ok, %{"chain" => chain}} = Cachex.get(:app_cache, "metrics")
-        txs_to_show = if standalone, do: info, else: Enum.take(info, 12)
+    info =
+      case Cachex.get(:app_cache, "transaction_cache") do
+        {:ok, data} when is_list(data) -> data
+        _ -> []
+      end
 
-        {:ok,
-         assign(socket,
-           transaction_cache: info,
-           txs_to_show: txs_to_show,
-           chain: chain,
-           zcash_network: network,
-           standalone: standalone
-         )}
+    chain =
+      case Cachex.get(:app_cache, "metrics") do
+        {:ok, %{"chain" => c}} -> c
+        _ -> "main"
+      end
 
-      _ ->
-        {:ok,
-         assign(socket,
-           transaction_cache: [],
-           txs_to_show: [],
-           chain: "main",
-           zcash_network: network,
-           standalone: standalone
-         )}
-    end
+    txs_to_show = if standalone, do: info, else: Enum.take(info, 12)
+
+    {:ok,
+     assign(socket,
+       transaction_cache: info,
+       txs_to_show: txs_to_show,
+       chain: chain,
+       zcash_network: network,
+       standalone: standalone
+     )}
   end
 
   @impl true
   def handle_info(:update, socket) do
     Process.send_after(self(), :update, 1000)
-    {:ok, info} = Cachex.get(:app_cache, "transaction_cache")
-    txs_to_show = if socket.assigns.standalone, do: info, else: Enum.take(info, 12)
+
+    info =
+      case Cachex.get(:app_cache, "transaction_cache") do
+        {:ok, data} when is_list(data) -> data
+        _ -> []
+      end
+
+    txs_to_show =
+      if socket.assigns.standalone, do: info, else: Enum.take(info, 12)
 
     {:noreply,
      assign(socket,
@@ -58,8 +63,10 @@ defmodule ZcashExplorerWeb.RecentTransactionsLive do
         <meta charset="UTF-8">
         <meta http-equiv="X-UA-Compatible" content="IE=edge">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta name="csrf-token" content={Plug.CSRFProtection.get_csrf_token()} />
         <title>Recent Transactions - Zcash Explorer</title>
         <link rel="stylesheet" href="/assets/app.css">
+        <script defer phx-track-static type="text/javascript" src="/js/app.js"></script>
       </head>
       <body class="bg-gray-50 dark:bg-gray-900">
         <%= if @standalone do %>
@@ -76,7 +83,6 @@ defmodule ZcashExplorerWeb.RecentTransactionsLive do
             </div>
           </header>
         <% end %>
-
         <div class="w-full">
           <div class="shadow overflow-hidden border-gray-200 rounded-lg overflow-x-auto">
             <table class="w-full text-sm text-left text-gray-500 dark:text-gray-400">
@@ -139,7 +145,6 @@ defmodule ZcashExplorerWeb.RecentTransactionsLive do
   defp format_amount(n) when is_number(n), do: :erlang.float_to_binary(n * 1.0, decimals: 8)
   defp format_amount(_), do: "0.00000000"
 
-  # fee → unsigned, flow → signed
   defp format_delta(nil, _), do: "0.00000000"
 
   defp format_delta(n, "fee") when is_number(n),

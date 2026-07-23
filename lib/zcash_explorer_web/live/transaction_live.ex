@@ -1,6 +1,5 @@
 defmodule ZcashExplorerWeb.TransactionLive do
   use Phoenix.LiveView, layout: false
-  import Phoenix.HTML.Tag
   import ZcashExplorerWeb.TransactionHelper
 
   @impl true
@@ -43,8 +42,10 @@ defmodule ZcashExplorerWeb.TransactionLive do
         <meta charset="UTF-8">
         <meta http-equiv="X-UA-Compatible" content="IE=edge">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta name="csrf-token" content={Plug.CSRFProtection.get_csrf_token()} />
         <title>Transaction <%= @txid %> - Zcash Explorer</title>
         <link rel="stylesheet" href="/assets/app.css">
+        <script defer phx-track-static type="text/javascript" src="/js/app.js"></script>
       </head>
       <body class="bg-gray-50 dark:bg-gray-900">
         <%= if @standalone do %>
@@ -61,14 +62,12 @@ defmodule ZcashExplorerWeb.TransactionLive do
             </div>
           </header>
         <% end %>
-
         <div class="mx-auto px-4 py-8">
           <h1 class="text-base sm:text-2xl font-semibold mb-6">
-	  <span class="text-gray-500 font-normal">Transaction</span>
-	  <br class="sm:hidden" />
-	  <span class="font-mono text-sm sm:text-xl break-all"><%= @txid %></span>
-	</h1>
-
+            <span class="text-gray-500 font-normal">Transaction</span>
+            <br class="sm:hidden" />
+            <span class="font-mono text-sm sm:text-xl break-all"><%= @txid %></span>
+          </h1>
           <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
             <!-- Stats -->
             <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
@@ -91,7 +90,6 @@ defmodule ZcashExplorerWeb.TransactionLive do
                 </div>
               </dl>
             </div>
-
             <!-- More stats -->
             <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
               <dl class="space-y-4">
@@ -116,7 +114,6 @@ defmodule ZcashExplorerWeb.TransactionLive do
                 </div>
               </dl>
             </div>
-
             <!-- TX Type + Pools -->
             <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
               <div class="flex flex-col gap-3">
@@ -133,7 +130,6 @@ defmodule ZcashExplorerWeb.TransactionLive do
               </div>
             </div>
           </div>
-
           <%= public_transfers_section(assigns) %>
         </div>
       </body>
@@ -142,76 +138,74 @@ defmodule ZcashExplorerWeb.TransactionLive do
   end
 
   defp public_transfers_section(assigns) do
-  ~H"""
-  <div class="mt-8 bg-white dark:bg-gray-800 shadow rounded-lg p-4 sm:p-6">
-    <h2 class="text-lg font-semibold mb-4">Public Transfers</h2>
-
-    <div class="flex flex-col lg:flex-row lg:items-start gap-4 lg:gap-8">
-      <!-- Inputs -->
-      <div class="flex-1 min-w-0">
-        <div class="text-sm text-gray-500 mb-3">
-          Inputs (<%= length((@tx && @tx.vin) || []) %>)
-        </div>
-        <div class="space-y-2">
-          <%= for vin <- (@tx && @tx.vin) || [] do %>
-            <% address = get_input_address(vin, @full_cache) || "—" %>
-            <% amount = get_input_value(vin, @full_cache) %>
-            <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-1 py-3 px-3 bg-gray-50 dark:bg-gray-700 rounded border dark:border-gray-600">
-              <a
-                href={"/address/#{address}"}
-                class="font-mono text-sm text-indigo-600 hover:underline break-all"
-              >
-                <%= address %>
-              </a>
-              <span class="font-medium text-sm whitespace-nowrap">
-                <%= format_zec(amount) %> ZEC
-              </span>
-            </div>
-          <% end %>
-        </div>
-      </div>
-
-      <!-- Arrow (hidden on mobile, shown on desktop) -->
-      <div class="hidden lg:flex items-center justify-center text-3xl text-gray-300 pt-8">
-        →
-      </div>
-      <!-- Mobile arrow -->
-      <div class="flex lg:hidden items-center justify-center text-2xl text-gray-300 py-1">
-        ↓
-      </div>
-
-      <!-- Outputs -->
-      <div class="flex-1 min-w-0">
-        <div class="text-sm text-gray-500 mb-3">
-          Outputs (<%= length((@tx && @tx.vout) || []) %>)
-        </div>
-        <div class="space-y-2">
-          <%= for vout <- (@tx && @tx.vout) || [] do %>
-            <% address = first_address(vout) %>
-            <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-1 py-3 px-3 bg-gray-50 dark:bg-gray-700 rounded border dark:border-gray-600">
-              <%= if address do %>
+    ~H"""
+    <div class="mt-8 bg-white dark:bg-gray-800 shadow rounded-lg p-4 sm:p-6">
+      <h2 class="text-lg font-semibold mb-4">Public Transfers</h2>
+      <div class="flex flex-col lg:flex-row lg:items-start gap-4 lg:gap-8">
+        <!-- Inputs -->
+        <div class="flex-1 min-w-0">
+          <div class="text-sm text-gray-500 mb-3">
+            Inputs (<%= length((@tx && @tx.vin) || []) %>)
+          </div>
+          <div class="space-y-2">
+            <%= for vin <- (@tx && @tx.vin) || [] do %>
+              <% address = get_input_address(vin, @full_cache) || "—" %>
+              <% amount = get_input_value(vin, @full_cache) %>
+              <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-1 py-3 px-3 bg-gray-50 dark:bg-gray-700 rounded border dark:border-gray-600">
                 <a
                   href={"/address/#{address}"}
                   class="font-mono text-sm text-indigo-600 hover:underline break-all"
                 >
                   <%= address %>
                 </a>
-              <% else %>
-                <span class="font-mono text-sm text-gray-400">No address</span>
-              <% end %>
-              <span class="font-medium text-sm whitespace-nowrap">
-                <%= format_zec(vout.value || 0) %> ZEC
-              </span>
-            </div>
-          <% end %>
+                <span class="font-medium text-sm whitespace-nowrap">
+                  <%= format_zec(amount) %> ZEC
+                </span>
+              </div>
+            <% end %>
+          </div>
+        </div>
+        <!-- Arrow (hidden on mobile, shown on desktop) -->
+        <div class="hidden lg:flex items-center justify-center text-3xl text-gray-300 pt-8">
+          →
+        </div>
+        <!-- Mobile arrow -->
+        <div class="flex lg:hidden items-center justify-center text-2xl text-gray-300 py-1">
+          ↓
+        </div>
+        <!-- Outputs -->
+        <div class="flex-1 min-w-0">
+          <div class="text-sm text-gray-500 mb-3">
+            Outputs (<%= length((@tx && @tx.vout) || []) %>)
+          </div>
+          <div class="space-y-2">
+            <%= for vout <- (@tx && @tx.vout) || [] do %>
+              <% address = first_address(vout) %>
+              <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-1 py-3 px-3 bg-gray-50 dark:bg-gray-700 rounded border dark:border-gray-600">
+                <%= if address do %>
+                  <a
+                    href={"/address/#{address}"}
+                    class="font-mono text-sm text-indigo-600 hover:underline break-all"
+                  >
+                    <%= address %>
+                  </a>
+                <% else %>
+                  <span class="font-mono text-sm text-gray-400">No address</span>
+                <% end %>
+                <span class="font-medium text-sm whitespace-nowrap">
+                  <%= format_zec(vout.value || 0) %> ZEC
+                </span>
+              </div>
+            <% end %>
+          </div>
         </div>
       </div>
     </div>
-  </div>
-  """
-end
+    """
+  end
 
   # ── Fee calculation (includes Ironwood) ──────────────────────────────────
+
   defp tx_fee(nil, _), do: 0.0
 
   defp tx_fee(tx, full_cache) do
@@ -292,6 +286,7 @@ end
   end
 
   # ── Address helpers ──────────────────────────────────────────────────────
+
   defp first_address(vout) do
     case vout && vout.scriptPubKey && vout.scriptPubKey.addresses do
       addresses when is_list(addresses) and length(addresses) > 0 -> hd(addresses)
@@ -339,6 +334,7 @@ end
   end
 
   # ── Formatting ───────────────────────────────────────────────────────────
+
   defp format_zec(nil), do: "0.00000000"
 
   defp format_zec(amount) when is_integer(amount) do
