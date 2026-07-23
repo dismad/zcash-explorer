@@ -85,7 +85,9 @@ defmodule ZcashExplorerWeb.RecentTransactionsLive do
                   <th scope="col" class="px-6 py-3">Transaction ID</th>
                   <th scope="col" class="px-6 py-3">Block#</th>
                   <th scope="col" class="px-6 py-3">Time (UTC)</th>
-                  <th scope="col" class="px-6 py-3">Public Output (<%= if @chain == "main", do: "ZEC", else: "TAZ" %>)</th>
+                  <th scope="col" class="px-6 py-3 text-right">Public Input (<%= if @chain == "main", do: "ZEC", else: "TAZ" %>)</th>
+                  <th scope="col" class="px-6 py-3 text-right">Public Output (<%= if @chain == "main", do: "ZEC", else: "TAZ" %>)</th>
+                  <th scope="col" class="px-6 py-3 text-right">Δ Transparent</th>
                   <th scope="col" class="px-4 py-3">TX Type</th>
                 </tr>
               </thead>
@@ -99,7 +101,17 @@ defmodule ZcashExplorerWeb.RecentTransactionsLive do
                       <a href={"/blocks/#{tx["block_height"]}"}><%= tx["block_height"] %></a>
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm font-medium"><%= tx["time"] %></td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium"><%= tx["tx_out_total"] %> ZEC</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-right">
+                      <%= format_amount(tx["tx_in_total"]) %>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-right">
+                      <%= format_amount(tx["tx_out_total"]) %>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-right">
+                      <span class={delta_class(tx["tx_delta"], tx["delta_kind"])}>
+                        <%= format_delta(tx["tx_delta"], tx["delta_kind"]) %>
+                      </span>
+                    </td>
                     <td class="px-4 py-4">
                       <div class="flex items-center gap-1.5 flex-wrap">
                         <%= if match?({:safe, _}, tx["type"]) do %>
@@ -122,4 +134,32 @@ defmodule ZcashExplorerWeb.RecentTransactionsLive do
     </html>
     """
   end
+
+  defp format_amount(nil), do: "0.00000000"
+  defp format_amount(n) when is_number(n), do: :erlang.float_to_binary(n * 1.0, decimals: 8)
+  defp format_amount(_), do: "0.00000000"
+
+  # fee → unsigned, flow → signed
+  defp format_delta(nil, _), do: "0.00000000"
+
+  defp format_delta(n, "fee") when is_number(n),
+    do: :erlang.float_to_binary(abs(n) * 1.0, decimals: 8)
+
+  defp format_delta(n, _) when is_number(n) and n > 0,
+    do: "+#{:erlang.float_to_binary(n * 1.0, decimals: 8)}"
+
+  defp format_delta(n, _) when is_number(n),
+    do: :erlang.float_to_binary(n * 1.0, decimals: 8)
+
+  defp format_delta(_, _), do: "0.00000000"
+
+  defp delta_class(_, "fee"), do: "text-gray-500"
+
+  defp delta_class(n, _) when is_number(n) and n > 0.00000001,
+    do: "text-emerald-600 dark:text-emerald-400"
+
+  defp delta_class(n, _) when is_number(n) and n < -0.00000001,
+    do: "text-amber-600 dark:text-amber-400"
+
+  defp delta_class(_, _), do: "text-gray-500"
 end
