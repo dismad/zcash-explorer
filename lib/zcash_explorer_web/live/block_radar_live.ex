@@ -3,10 +3,11 @@ defmodule ZcashExplorerWeb.BlockRadarLive do
 
   @target_interval 75.0
   @tick_interval 1_000
+  @refresh_every 5
 
   def mount(_params, _session, socket) do
     if connected?(socket) do
-      :timer.send_interval(@tick_interval, self(), :tick)
+      Process.send_after(self(), :tick, @tick_interval)
     end
 
     blocks = get_recent_blocks()
@@ -14,18 +15,20 @@ defmodule ZcashExplorerWeb.BlockRadarLive do
     {:ok,
      socket
      |> assign(:blocks, blocks)
+     |> assign(:tip_height, tip_height(blocks))
      |> assign(:rolling_avg_size, calculate_rolling_avg_size(blocks))
      |> assign(:current_time, DateTime.utc_now())
-     |> assign(:version, 0)}
+     |> assign(:tick_count, 0)}
   end
 
 def handle_info(:tick, socket) do
+  Process.send_after(self(), :tick, @tick_interval)
+
+  tick_count = socket.assigns.tick_count + 1
+
   socket =
-    if rem(socket.assigns.version + 1, 15) == 0 do
-      blocks = get_recent_blocks()
-      socket
-      |> assign(:blocks, blocks)
-      |> assign(:rolling_avg_size, calculate_rolling_avg_size(blocks))
+    if rem(tick_count, @refresh_every) == 0 do
+      refresh_blocks(socket)
     else
       socket
     end
@@ -33,9 +36,87 @@ def handle_info(:tick, socket) do
   {:noreply,
    socket
    |> assign(:current_time, DateTime.utc_now())
-   |> update(:version, &(&1 + 1))}
+   |> assign(:tick_count, tick_count)}
 end
 
+defp refresh_blocks(socket) do
+  chain_tip =
+    case Zcashex.getblockcount() do
+      {:ok, n} when is_integer(n) -> n
+      _ -> nil
+    end
+
+  cond do
+    is_nil(chain_tip) ->
+      socket
+
+    chain_tip == socket.assigns.tip_height ->
+      socket
+
+    true ->
+      blocks = load_blocks_for_tip(chain_tip, socket.assigns.blocks)
+
+      socket
+      |> assign(:blocks, blocks)
+      |> assign(:tip_height, tip_height(blocks) || chain_tip)
+      |> assign(:rolling_avg_size, calculate_rolling_avg_size(blocks))
+  end
+end
+
+defp load_blocks_for_tip(chain_tip, previous_blocks) do
+  cached = get_recent_blocks()
+  cached_tip = tip_height(cached)
+
+  cond do
+    cached_tip == chain_tip and cached != [] ->
+      cached
+
+    true ->
+      # Cache behind — build from previous list + fetch missing tip blocks
+      known = Map.new(previous_blocks, fn b -> {b["height"], b} end)
+
+      start_h = max(chain_tip - 143, 0) # ~12x12 grid
+
+      Enum.map(start_h..chain_tip, fn h ->
+        case Map.get(known, h) do
+          nil -> fetch_block_summary(h)
+          b -> b
+        end
+      end)
+      |> Enum.reject(&is_nil/1)
+      |> Enum.sort_by(& &1["height"], :desc)
+  end
+end
+
+defp fetch_block_summary(height) do
+  case Zcashex.getblock(height, 1) do
+    {:ok, block} when is_map(block) ->
+      %{
+        "height" => block["height"] || height,
+        "size" => block["size"] || 0,
+        "hash" => block["hash"],
+        "time" => format_block_time(block["time"]),
+        "tx_count" => length(block["tx"] || [])
+      }
+
+    _ ->
+      nil
+  end
+end
+
+defp format_block_time(unix) when is_integer(unix) do
+  case DateTime.from_unix(unix) do
+    {:ok, dt} -> DateTime.to_iso8601(dt)
+    _ -> ""
+  end
+end
+
+defp format_block_time(_), do: ""
+
+  defp tip_height([]), do: nil
+  defp tip_height([%{"height" => h} | _]), do: h
+  defp tip_height([%{height: h} | _]), do: h
+  defp tip_height(_), do: nil
   defp get_recent_blocks do
     case Cachex.get(:app_cache, "block_cache") do
       {:ok, blocks} when is_list(blocks) -> blocks
@@ -92,10 +173,14 @@ end
     <!DOCTYPE html>
     <html lang="en">
       <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Block Radar • Zcash Explorer</title>
-        <link rel="stylesheet" href="/assets/app.css">
+        <head>
+	  <meta charset="UTF-8">
+	  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+	  <meta name="csrf-token" content={Plug.CSRFProtection.get_csrf_token()} />
+	  <title>Block Radar • Zcash Explorer</title>
+	  <link rel="stylesheet" href="/assets/app.css">
+	  <script defer phx-track-static type="text/javascript" src="/js/app.js"></script>
+	</head>
       </head>
       <body class="bg-zinc-950 text-white font-mono">
         <header class="bg-zinc-900 border-b border-zinc-800 sticky top-0 z-50">
