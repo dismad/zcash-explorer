@@ -4,46 +4,50 @@ defmodule ZcashExplorerWeb.TransactionHelper do
   @pure_shielded_pools ["ironwood", "orchard", "sapling", "sprout"]
   @priority_types ["coinbase", "shielding", "deshielding", "transparent"]
 
-  def tx_type(tx) when is_map(tx) do
+  @doc """
+  Returns a string type name for warmers and lists.
+  Never returns HTML.
+  """
+  def classify(tx) when is_map(tx) do
     pools = Map.get(tx, "pools") || Map.get(tx, :pools) || pool_list(tx)
     has_shielded_pool? = Enum.any?(pools, &(&1 in @pure_shielded_pools))
     has_transparent? = "transparent" in pools
 
-    pre_computed = Map.get(tx, "type") || Map.get(tx, :type)
-    pre_computed = if is_binary(pre_computed), do: pre_computed, else: nil
+    pre = Map.get(tx, "type") || Map.get(tx, :type)
+    pre = if is_binary(pre), do: pre, else: nil
 
     detected = detect_type(tx)
 
-    type =
-      cond do
-        # 1) Strong classifications from live detection
-        detected in @priority_types ->
-          detected
+    cond do
+      detected in @priority_types ->
+        detected
 
-        # 2) Warmer stored a strong type string
-        is_binary(pre_computed) and pre_computed in @priority_types ->
-          pre_computed
+      is_binary(pre) and pre in @priority_types ->
+        pre
 
-        # 3) Pure shielded pool (no transparent) — including cache-only rows
-        has_shielded_pool? and not has_transparent? ->
-          "shielded"
+      Map.get(tx, "is_coinbase") == true or Map.get(tx, :is_coinbase) == true ->
+        "coinbase"
 
-        is_binary(pre_computed) and pre_computed in @pure_shielded_pools ->
-          "shielded"
+      has_shielded_pool? and not has_transparent? ->
+        "shielded"
 
-        detected == "shielded" ->
-          "shielded"
+      is_binary(pre) and pre in @pure_shielded_pools ->
+        "shielded"
 
-        is_binary(pre_computed) and pre_computed not in ["unknown", "mixed", ""] ->
-          pre_computed
+      detected == "shielded" ->
+        "shielded"
 
-        true ->
-          detected
-      end
+      is_binary(pre) and pre not in ["unknown", "mixed", ""] ->
+        pre
 
-    badge(type)
+      true ->
+        detected
+    end
   end
 
+  def classify(_), do: "unknown"
+
+  def tx_type(tx) when is_map(tx), do: badge(classify(tx))
   def tx_type(_), do: badge("unknown")
 
   def pool_list(tx) when is_map(tx) do
@@ -133,7 +137,6 @@ defmodule ZcashExplorerWeb.TransactionHelper do
     has_transparent_out = length(vout) > 0
     pools = Map.get(tx, "pools") || Map.get(tx, :pools) || []
 
-    # Warmer may stamp type as a plain string
     stored = Map.get(tx, "type") || Map.get(tx, :type)
     stored = if is_binary(stored), do: stored, else: nil
 
@@ -191,7 +194,6 @@ defmodule ZcashExplorerWeb.TransactionHelper do
 
   defp get_pool_zat(_), do: 0
 
-  # Works on full RPC maps and thin cache rows
   defp is_coinbase?(tx) when is_map(tx) do
     vin = Map.get(tx, "vin") || Map.get(tx, :vin) || []
 
