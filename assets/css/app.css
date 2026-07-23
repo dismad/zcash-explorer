@@ -1,3 +1,6 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* ensure Shielded badge color is generated */
+.bg-teal-400 { }
