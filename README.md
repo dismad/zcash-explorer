@@ -279,6 +279,3 @@ cd ..
 Apache License 2.0
 
 Based on the original Nighthawk zcash-explorer. Ironwood and related UI work in this fork.
-```
-
-That order (`.env` → Mix → webpack → `./dev.sh`) matches what actually works on your machine.
