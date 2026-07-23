@@ -1,16 +1,27 @@
 defmodule ZcashExplorerWeb.TransactionHelper do
   import Phoenix.HTML
 
-  def tx_type(tx) when is_map(tx) do
-    pre_computed = Map.get(tx, "type") || Map.get(tx, :type)
-    detected = detect_type(tx)
+  @pure_shielded_pools ["ironwood", "orchard", "sapling", "sprout"]
 
-    # Pure pool names from warmers → treat as shielded (chips carry the pool)
-    pure_pools = ["ironwood", "orchard", "sapling", "sprout"]
+  def tx_type(tx) when is_map(tx) do
+    pools = Map.get(tx, "pools") || Map.get(tx, :pools) || pool_list(tx)
+    has_shielded_pool? = Enum.any?(pools, &(&1 in @pure_shielded_pools))
+    has_transparent? = "transparent" in pools
+
+    # Warmer may store a string or pre-rendered HTML {:safe, _} — only trust binaries
+    pre_computed = Map.get(tx, "type") || Map.get(tx, :type)
+    pre_computed = if is_binary(pre_computed), do: pre_computed, else: nil
+
+    detected = detect_type(tx)
 
     type =
       cond do
-        is_binary(pre_computed) and pre_computed in pure_pools ->
+        # Cache row: has shielded pool chip data, no transparent → Shielded
+        has_shielded_pool? and not has_transparent? and
+            detected in ["shielded", "mixed", "unknown"] ->
+          "shielded"
+
+        is_binary(pre_computed) and pre_computed in @pure_shielded_pools ->
           "shielded"
 
         is_binary(pre_computed) and pre_computed not in ["unknown", "mixed", ""] ->
@@ -67,10 +78,10 @@ defmodule ZcashExplorerWeb.TransactionHelper do
   def pool_badges(_), do: []
 
   def pool_badge("transparent") do
-  raw(
-    ~S{<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium bg-amber-50 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200">Transparent</span>}
-  )
-end
+    raw(
+      ~S{<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium bg-amber-50 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200">Transparent</span>}
+    )
+  end
 
   def pool_badge("sprout") do
     raw(
@@ -112,14 +123,15 @@ end
     is_coinbase = is_coinbase?(vin)
     has_transparent_out = length(vout) > 0
 
+    # Cache-only rows may only have "pools"
+    pools = Map.get(tx, "pools") || Map.get(tx, :pools) || []
+
     cond do
       is_coinbase ->
         "coinbase"
 
-      # Pure Sprout →  (chip shows Sprout)
-      is_list(vjoinsplit) and vjoinsplit != [] and not has_transparent_out and
-          length(vin) == 0 ->
-        ""
+      is_list(vjoinsplit) and vjoinsplit != [] and not has_transparent_out and length(vin) == 0 ->
+        "shielded"
 
       length(vjoinsplit) > 0 ->
         "sprout"
@@ -131,7 +143,7 @@ end
         "shielding"
 
       has_pool?(ironwood) ->
-        ""
+        "shielded"
 
       has_pool?(orchard) ->
         "shielded"
@@ -139,7 +151,14 @@ end
       has_sapling?(tx) ->
         "shielded"
 
+      # Cache warmer only stored pool names
+      Enum.any?(pools, &(&1 in @pure_shielded_pools)) and "transparent" not in pools ->
+        "shielded"
+
       length(vin) > 0 && length(vout) > 0 ->
+        "transparent"
+
+      "transparent" in pools and not Enum.any?(pools, &(&1 in @pure_shielded_pools)) ->
         "transparent"
 
       true ->
