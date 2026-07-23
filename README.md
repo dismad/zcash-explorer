@@ -84,18 +84,16 @@ asdf install
 The app is started with **`./dev.sh`**, which loads `.env`.
 
 ```bash
-cp .env.example .env   # if the example exists
-# or create one:
+# create one:
 nano .env
 ```
 
 **Minimum `.env`:**
 
+### Path to your Zebra RPC cookie (required)
 ```bash
-# Path to your Zebra RPC cookie (required)
 ZCASH_RPC_COOKIE_FILE=/var/lib/zebrad-rpc/.cookie
 ```
-
 Find the cookie if you’re not sure:
 
 ```bash
@@ -106,6 +104,30 @@ Typical paths:
 
 - `/var/lib/zebrad-rpc/.cookie`
 - `~/.cache/zebra/.cookie`
+
+### Generate initial secrets without Mix
+
+```bash
+echo "SECRET_KEY_BASE=$(openssl rand -base64 48)" >> .env
+echo "SIGNING_SALT=$(openssl rand -base64 48)" >> .env
+echo "ZCASH_RPC_COOKIE_FILE=/path/to/your/.cookie" >> .env
+```
+
+### Now Mix works
+
+```bash
+mix phx.gen.secret
+mix phx.gen.secret
+```
+Put them in .env
+
+```bash
+Bash# Phoenix secrets (required)
+SECRET_KEY_BASE=paste_first_secret_here
+SIGNING_SALT=paste_second_secret_here
+mix deps.get
+./dev.sh
+```
 
 **Optional overrides** (only if different from defaults in `config/dev.exs`):
 
@@ -119,7 +141,7 @@ For **testnet**, use your testnet cookie/port and set the network accordingly in
 
 ---
 
-## 5. Install dependencies
+## 4. Install dependencies
 
 ```bash
 mix deps.get
@@ -142,7 +164,7 @@ If the explorer already runs for you without Postgres, you can ignore this secti
 
 ---
 
-## 6. Start the explorer
+## 5. Start the explorer
 
 ```bash
 chmod +x dev.sh
