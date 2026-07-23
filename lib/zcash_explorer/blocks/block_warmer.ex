@@ -7,7 +7,7 @@ defmodule ZcashExplorer.Blocks.BlockWarmer do
   @doc """
   Returns the interval for this warmer.
   """
-  def interval, do: :timer.seconds(15)
+  def interval, do: :timer.seconds(5)
 
   @doc """
   Executes this cache warmer.
