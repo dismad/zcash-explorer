@@ -105,7 +105,7 @@ defmodule ZcashExplorerWeb.TransactionHelper do
 
   def pool_badge("sapling") do
   raw(
-    ~S{<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium bg-yellow-400 text-gray-900 dark:bg-yellow-500 dark:text-gray-900">Sapling</span>}
+    ~S{<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium bg-yellow-100 text-yellow-900 dark:bg-yellow-900/40 dark:text-yellow-200">Sapling</span>}
   )
 end
 
