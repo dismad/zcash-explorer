@@ -118,7 +118,7 @@ defmodule ZcashExplorerWeb.BlockLive do
                 </div>
                 <div>
                   <dt class="text-gray-500">Input total</dt>
-                  <dd class="mt-1"><%= format_zec(input_total(@block)) %> ZEC</dd>
+                  <dd class="mt-1"><%= format_zec(input_total(@block, @full_cache)) %> ZEC</dd>
                 </div>
                 <div>
                   <dt class="text-gray-500">Output total</dt>
@@ -213,22 +213,35 @@ defmodule ZcashExplorerWeb.BlockLive do
   end
 
   defp input_count(nil), do: 0
+
   defp input_count(block),
     do: Enum.reduce(block.tx || [], 0, fn tx, acc -> acc + length(tx.vin || []) end)
 
   defp output_count(nil), do: 0
+
   defp output_count(block),
     do: Enum.reduce(block.tx || [], 0, fn tx, acc -> acc + length(tx.vout || []) end)
 
-  defp input_total(_), do: 0.0
+  # ── Fixed Input / Output totals ──────────────────────────────────────────
+
+  defp input_total(nil, _full_cache), do: 0.0
+
+  defp input_total(block, full_cache) do
+    (block.tx || [])
+    |> Enum.reduce(0, fn tx, acc ->
+      full = Map.get(full_cache, tx.txid) || %{}
+      acc + calculate_vin_sum(full, full_cache)
+    end)
+    |> Kernel./(100_000_000.0)
+  end
 
   defp output_total(nil), do: 0.0
 
   defp output_total(block) do
-    Enum.reduce(block.tx || [], Decimal.new(0), fn tx, acc ->
-      Decimal.add(acc, Decimal.from_float(tx.valueBalance || 0.0))
+    (block.tx || [])
+    |> Enum.reduce(0.0, fn tx, acc ->
+      acc + tx_output_total(tx)
     end)
-    |> Decimal.to_float()
   end
 
   defp tx_output_total(nil), do: 0.0
