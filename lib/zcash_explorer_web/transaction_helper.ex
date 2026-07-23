@@ -1,16 +1,37 @@
 defmodule ZcashExplorerWeb.TransactionHelper do
   import Phoenix.HTML
 
-  def tx_type(tx) when is_map(tx) do
-    pre_computed = Map.get(tx, "type") || Map.get(tx, :type)
-    detected = detect_type(tx)
+  @pure_shielded_pools ["ironwood", "orchard", "sapling", "sprout"]
+  @priority_types ["coinbase", "shielding", "deshielding", "transparent"]
 
-    # Pure pool names from warmers → treat as shielded (chips carry the pool)
-    pure_pools = ["ironwood", "orchard", "sapling", "sprout"]
+  def tx_type(tx) when is_map(tx) do
+    pools = Map.get(tx, "pools") || Map.get(tx, :pools) || pool_list(tx)
+    has_shielded_pool? = Enum.any?(pools, &(&1 in @pure_shielded_pools))
+    has_transparent? = "transparent" in pools
+
+    pre_computed = Map.get(tx, "type") || Map.get(tx, :type)
+    pre_computed = if is_binary(pre_computed), do: pre_computed, else: nil
+
+    detected = detect_type(tx)
 
     type =
       cond do
-        is_binary(pre_computed) and pre_computed in pure_pools ->
+        # 1) Strong classifications from live detection
+        detected in @priority_types ->
+          detected
+
+        # 2) Warmer stored a strong type string
+        is_binary(pre_computed) and pre_computed in @priority_types ->
+          pre_computed
+
+        # 3) Pure shielded pool (no transparent) — including cache-only rows
+        has_shielded_pool? and not has_transparent? ->
+          "shielded"
+
+        is_binary(pre_computed) and pre_computed in @pure_shielded_pools ->
+          "shielded"
+
+        detected == "shielded" ->
           "shielded"
 
         is_binary(pre_computed) and pre_computed not in ["unknown", "mixed", ""] ->
@@ -51,7 +72,7 @@ defmodule ZcashExplorerWeb.TransactionHelper do
       |> then(fn l -> if has_ironwood, do: ["ironwood" | l], else: l end)
       |> Enum.reverse()
 
-    if is_coinbase?(vin) do
+    if is_coinbase?(tx) do
       List.delete(list, "transparent")
     else
       list
@@ -67,10 +88,10 @@ defmodule ZcashExplorerWeb.TransactionHelper do
   def pool_badges(_), do: []
 
   def pool_badge("transparent") do
-  raw(
-    ~S{<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium bg-amber-50 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200">Transparent</span>}
-  )
-end
+    raw(
+      ~S{<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium bg-amber-50 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200">Transparent</span>}
+    )
+  end
 
   def pool_badge("sprout") do
     raw(
@@ -109,17 +130,22 @@ end
     orchard_zat = get_pool_zat(orchard)
     ironwood_zat = get_pool_zat(ironwood)
 
-    is_coinbase = is_coinbase?(vin)
     has_transparent_out = length(vout) > 0
+    pools = Map.get(tx, "pools") || Map.get(tx, :pools) || []
+
+    # Warmer may stamp type as a plain string
+    stored = Map.get(tx, "type") || Map.get(tx, :type)
+    stored = if is_binary(stored), do: stored, else: nil
 
     cond do
-      is_coinbase ->
+      is_coinbase?(tx) or stored == "coinbase" ->
         "coinbase"
 
-      # Pure Sprout →  (chip shows Sprout)
-      is_list(vjoinsplit) and vjoinsplit != [] and not has_transparent_out and
-          length(vin) == 0 ->
-        ""
+      stored in ["shielding", "deshielding", "transparent"] ->
+        stored
+
+      is_list(vjoinsplit) and vjoinsplit != [] and not has_transparent_out and length(vin) == 0 ->
+        "shielded"
 
       length(vjoinsplit) > 0 ->
         "sprout"
@@ -131,7 +157,7 @@ end
         "shielding"
 
       has_pool?(ironwood) ->
-        ""
+        "shielded"
 
       has_pool?(orchard) ->
         "shielded"
@@ -139,7 +165,13 @@ end
       has_sapling?(tx) ->
         "shielded"
 
+      Enum.any?(pools, &(&1 in @pure_shielded_pools)) and "transparent" not in pools ->
+        "shielded"
+
       length(vin) > 0 && length(vout) > 0 ->
+        "transparent"
+
+      "transparent" in pools and not Enum.any?(pools, &(&1 in @pure_shielded_pools)) ->
         "transparent"
 
       true ->
@@ -159,8 +191,15 @@ end
 
   defp get_pool_zat(_), do: 0
 
-  defp is_coinbase?(vin) when is_list(vin) do
-    Enum.any?(vin, fn v -> Map.get(v, "coinbase") || Map.get(v, :coinbase) end)
+  # Works on full RPC maps and thin cache rows
+  defp is_coinbase?(tx) when is_map(tx) do
+    vin = Map.get(tx, "vin") || Map.get(tx, :vin) || []
+
+    Enum.any?(vin, fn v ->
+      is_map(v) and (Map.get(v, "coinbase") != nil or Map.get(v, :coinbase) != nil)
+    end) or
+      Map.get(tx, "is_coinbase") == true or
+      Map.get(tx, :is_coinbase) == true
   end
 
   defp is_coinbase?(_), do: false
