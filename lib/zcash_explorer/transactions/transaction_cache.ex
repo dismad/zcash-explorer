@@ -10,19 +10,27 @@ defmodule ZcashExplorer.Transactions.TransactionWarmer do
         blocks =
           Enum.to_list((n - 20)..n)
           |> Enum.map(fn x ->
-            {:ok, block} = Zcashex.getblock(x, 2)
-            block
+            case Zcashex.getblock(x, 2) do
+              {:ok, block} -> block
+              _ -> nil
+            end
           end)
+          |> Enum.reject(&is_nil/1)
 
         blocks
         |> Enum.sort(&(&1["height"] >= &2["height"]))
-        |> Enum.map(fn x -> x["tx"] end)
+        |> Enum.map(fn x -> x["tx"] || [] end)
         |> List.flatten()
         |> Enum.take(20)
         |> Enum.map(fn y ->
-          {:ok, tx} = Zcashex.getrawtransaction(y["txid"], 1)
-          Zcashex.Transaction.from_map(tx)
+          txid = y["txid"] || y[:txid]
+
+          case Zcashex.getrawtransaction(txid, 1) do
+            {:ok, tx} -> Zcashex.Transaction.from_map(tx)
+            _ -> nil
+          end
         end)
+        |> Enum.reject(&is_nil/1)
         |> Enum.map(fn z ->
           out_total = ZcashExplorerWeb.Helpers.tx_out_total(z)
           in_total = tx_in_total(z)
@@ -32,13 +40,18 @@ defmodule ZcashExplorer.Transactions.TransactionWarmer do
           only_transparent? =
             (pools == [] or pools == ["transparent"]) and not coinbase?
 
-          # Flipped sign: Out - In
-          # Pure transparent → show fee (always ≥ 0)
           {delta, delta_kind} =
             if only_transparent? do
               {abs(out_total - in_total), "fee"}
             else
               {out_total - in_total, "flow"}
+            end
+
+          type_name =
+            if coinbase? do
+              "coinbase"
+            else
+              ZcashExplorerWeb.TransactionHelper.classify(z)
             end
 
           %{
@@ -50,23 +63,25 @@ defmodule ZcashExplorer.Transactions.TransactionWarmer do
             "tx_delta" => delta,
             "delta_kind" => delta_kind,
             "size" => Map.get(z, :size),
-            "type" => ZcashExplorerWeb.TransactionHelper.tx_type(z),
-            "pools" => pools
+            # STRING type name only — never HTML from tx_type/1
+            "type" => type_name,
+            "pools" => pools,
+            "is_coinbase" => coinbase?
           }
         end)
-        |> handle_result
+        |> handle_result()
 
       {:error, reason} ->
-        {:error, reason} |> handle_result
+        handle_result({:error, reason})
     end
   end
 
   defp tx_in_total(tx) do
-    (tx.vin || [])
+    (Map.get(tx, :vin) || Map.get(tx, "vin") || [])
     |> Enum.reduce(0.0, fn vin, acc -> acc + vin_value(vin) end)
   end
 
-  defp vin_value(vin) do
+  defp vin_value(vin) when is_map(vin) do
     cond do
       Map.get(vin, :coinbase) != nil or Map.get(vin, "coinbase") != nil ->
         0.0
@@ -102,17 +117,29 @@ defmodule ZcashExplorer.Transactions.TransactionWarmer do
     end
   end
 
-  defp is_coinbase?(tx) do
-    vin = tx.vin || []
-    vin != [] and (hd(vin).coinbase != nil)
+  defp vin_value(_), do: 0.0
+
+  defp is_coinbase?(tx) when is_map(tx) do
+    vin = Map.get(tx, :vin) || Map.get(tx, "vin") || []
+
+    case vin do
+      [first | _] when is_map(first) ->
+        Map.get(first, :coinbase) != nil or Map.get(first, "coinbase") != nil
+
+      _ ->
+        false
+    end
   end
+
+  defp is_coinbase?(_), do: false
 
   defp handle_result({:error, reason}) do
     Logger.error("Error while warming the transaction cache. #{inspect(reason)}")
     :ignore
   end
 
-  defp handle_result(info) do
+  defp handle_result(info) when is_list(info) do
+    Logger.info("TransactionWarmer: Saved #{length(info)} transactions with correct types")
     {:ok, [{"transaction_cache", info}]}
   end
 end
