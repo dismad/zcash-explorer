@@ -79,7 +79,6 @@ if (themeToggleDarkIcon && themeToggleLightIcon && themeToggleBtn) {
       }
     }
   })
-<<<<<<< HEAD
 }
 =======
 }
