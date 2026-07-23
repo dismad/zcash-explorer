@@ -120,12 +120,8 @@ defmodule ZcashExplorerWeb.RecentTransactionsLive do
                     </td>
                     <td class="px-4 py-4">
                       <div class="flex items-center gap-1.5 flex-wrap">
-                        <%= if match?({:safe, _}, tx["type"]) do %>
-                          <%= raw(elem(tx["type"], 1)) %>
-                        <% else %>
-                          <%= tx_type(tx) %>
-                        <% end %>
-                        <%= for pool <- (tx["pools"] || []) do %>
+                        <%= tx_type(tx) %>
+                        <%= for pool <- pools_for(tx) do %>
                           <%= pool_badge(pool) %>
                         <% end %>
                       </div>
@@ -140,6 +136,16 @@ defmodule ZcashExplorerWeb.RecentTransactionsLive do
     </html>
     """
   end
+
+  # Prefer warmer pools list; fall back to live detection
+  defp pools_for(tx) when is_map(tx) do
+    case Map.get(tx, "pools") || Map.get(tx, :pools) do
+      pools when is_list(pools) and pools != [] -> pools
+      _ -> pool_list(tx)
+    end
+  end
+
+  defp pools_for(_), do: []
 
   defp format_amount(nil), do: "0.00000000"
   defp format_amount(n) when is_number(n), do: :erlang.float_to_binary(n * 1.0, decimals: 8)
