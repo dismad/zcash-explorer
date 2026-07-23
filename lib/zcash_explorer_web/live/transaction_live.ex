@@ -63,7 +63,11 @@ defmodule ZcashExplorerWeb.TransactionLive do
         <% end %>
 
         <div class="mx-auto px-4 py-8">
-          <h1 class="text-2xl font-semibold mb-6">Transaction <%= @txid %></h1>
+          <h1 class="text-base sm:text-2xl font-semibold mb-6">
+	  <span class="text-gray-500 font-normal">Transaction</span>
+	  <br class="sm:hidden" />
+	  <span class="font-mono text-sm sm:text-xl break-all"><%= @txid %></span>
+	</h1>
 
           <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
             <!-- Stats -->
@@ -138,76 +142,74 @@ defmodule ZcashExplorerWeb.TransactionLive do
   end
 
   defp public_transfers_section(assigns) do
-    content_tag(:div, class: "mt-8 bg-white dark:bg-gray-800 shadow rounded-lg p-6") do
-      [
-        content_tag(:h2, "Public Transfers", class: "text-lg font-semibold mb-4"),
-        content_tag(:div, class: "flex items-center gap-8") do
-          [
-            content_tag(:div, class: "flex-1") do
-              [
-                content_tag(:div, "Inputs (#{length((assigns.tx && assigns.tx.vin) || [])})",
-                  class: "text-sm text-gray-500 mb-3"
-                ),
-                content_tag(:div, class: "space-y-2") do
-                  for vin <- (assigns.tx && assigns.tx.vin) || [] do
-                    address = get_input_address(vin, assigns.full_cache) || "—"
-                    amount = get_input_value(vin, assigns.full_cache)
+  ~H"""
+  <div class="mt-8 bg-white dark:bg-gray-800 shadow rounded-lg p-4 sm:p-6">
+    <h2 class="text-lg font-semibold mb-4">Public Transfers</h2>
 
-                    content_tag(:div,
-                      class:
-                        "flex justify-between py-2 border-b last:border-0 bg-gray-50 dark:bg-gray-700 p-4 rounded border"
-                    ) do
-                      [
-                        content_tag(:a, address,
-                          href: "/address/#{address}",
-                          class: "font-mono text-sm text-indigo-600 hover:underline break-all"
-                        ),
-                        content_tag(:span, "#{format_zec(amount)} ZEC", class: "font-medium")
-                      ]
-                    end
-                  end
-                end
-              ]
-            end,
-            content_tag(:div, "→", class: "text-4xl text-gray-300"),
-            content_tag(:div, class: "flex-1") do
-              [
-                content_tag(:div, "Outputs (#{length((assigns.tx && assigns.tx.vout) || [])})",
-                  class: "text-sm text-gray-500 mb-3"
-                ),
-                content_tag(:div, class: "space-y-2") do
-                  for vout <- (assigns.tx && assigns.tx.vout) || [] do
-                    address = first_address(vout)
+    <div class="flex flex-col lg:flex-row lg:items-start gap-4 lg:gap-8">
+      <!-- Inputs -->
+      <div class="flex-1 min-w-0">
+        <div class="text-sm text-gray-500 mb-3">
+          Inputs (<%= length((@tx && @tx.vin) || []) %>)
+        </div>
+        <div class="space-y-2">
+          <%= for vin <- (@tx && @tx.vin) || [] do %>
+            <% address = get_input_address(vin, @full_cache) || "—" %>
+            <% amount = get_input_value(vin, @full_cache) %>
+            <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-1 py-3 px-3 bg-gray-50 dark:bg-gray-700 rounded border dark:border-gray-600">
+              <a
+                href={"/address/#{address}"}
+                class="font-mono text-sm text-indigo-600 hover:underline break-all"
+              >
+                <%= address %>
+              </a>
+              <span class="font-medium text-sm whitespace-nowrap">
+                <%= format_zec(amount) %> ZEC
+              </span>
+            </div>
+          <% end %>
+        </div>
+      </div>
 
-                    content_tag(:div,
-                      class:
-                        "flex justify-between items-center py-2 border-b last:border-none bg-gray-50 dark:bg-gray-700 p-4 rounded border"
-                    ) do
-                      [
-                        if address do
-                          content_tag(:a, address,
-                            href: "/address/#{address}",
-                            class: "font-mono text-sm text-indigo-600 hover:underline break-all"
-                          )
-                        else
-                          content_tag(:span, "No address",
-                            class: "font-mono text-sm text-gray-400"
-                          )
-                        end,
-                        content_tag(:span, "#{format_zec(vout.value || 0)} ZEC",
-                          class: "font-medium"
-                        )
-                      ]
-                    end
-                  end
-                end
-              ]
-            end
-          ]
-        end
-      ]
-    end
-  end
+      <!-- Arrow (hidden on mobile, shown on desktop) -->
+      <div class="hidden lg:flex items-center justify-center text-3xl text-gray-300 pt-8">
+        →
+      </div>
+      <!-- Mobile arrow -->
+      <div class="flex lg:hidden items-center justify-center text-2xl text-gray-300 py-1">
+        ↓
+      </div>
+
+      <!-- Outputs -->
+      <div class="flex-1 min-w-0">
+        <div class="text-sm text-gray-500 mb-3">
+          Outputs (<%= length((@tx && @tx.vout) || []) %>)
+        </div>
+        <div class="space-y-2">
+          <%= for vout <- (@tx && @tx.vout) || [] do %>
+            <% address = first_address(vout) %>
+            <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-1 py-3 px-3 bg-gray-50 dark:bg-gray-700 rounded border dark:border-gray-600">
+              <%= if address do %>
+                <a
+                  href={"/address/#{address}"}
+                  class="font-mono text-sm text-indigo-600 hover:underline break-all"
+                >
+                  <%= address %>
+                </a>
+              <% else %>
+                <span class="font-mono text-sm text-gray-400">No address</span>
+              <% end %>
+              <span class="font-medium text-sm whitespace-nowrap">
+                <%= format_zec(vout.value || 0) %> ZEC
+              </span>
+            </div>
+          <% end %>
+        </div>
+      </div>
+    </div>
+  </div>
+  """
+end
 
   # ── Fee calculation (includes Ironwood) ──────────────────────────────────
   defp tx_fee(nil, _), do: 0.0

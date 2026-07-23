@@ -86,27 +86,32 @@ defmodule ZcashExplorerWeb.BlockLive do
           </header>
         <% end %>
 
-        <div class="mx-auto px-4 py-8">
-          <h1 class="text-2xl font-semibold mb-6">Details for the Zcash block #<%= @block && @block.height %></h1>
+        <div class="mx-auto px-3 sm:px-4 py-4 sm:py-8">
+          <h1 class="text-lg sm:text-2xl font-semibold mb-4 sm:mb-6">
+            Details for the Zcash block #<%= @block && @block.height %>
+          </h1>
 
-          <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
-              <dl class="grid grid-cols-2 gap-x-8 gap-y-6 text-sm">
-                <div>
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-8">
+            <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-4 sm:p-6">
+              <dl class="grid grid-cols-2 gap-x-4 sm:gap-x-8 gap-y-3 sm:gap-y-6 text-sm">
+                <div class="col-span-2 sm:col-span-1">
                   <dt class="text-gray-500">Hash</dt>
-                  <dd class="font-mono break-all mt-1"><%= @block && @block.hash %></dd>
+                  <dd class="font-mono break-all mt-1 text-xs sm:text-sm"><%= @block && @block.hash %></dd>
                 </div>
                 <div>
                   <dt class="text-gray-500">Mined on</dt>
-                  <dd class="mt-1"><%= @block && @block.time %> (<%= relative_time(@block && @block.time) %>)</dd>
+                  <dd class="mt-1 text-xs sm:text-sm">
+                    <%= @block && @block.time %>
+                    <span class="text-gray-400">(<%= relative_time(@block && @block.time) %>)</span>
+                  </dd>
                 </div>
                 <div>
                   <dt class="text-gray-500">Height</dt>
                   <dd class="font-semibold mt-1"><%= @block && @block.height %></dd>
                 </div>
-                <div>
+                <div class="col-span-2 sm:col-span-1">
                   <dt class="text-gray-500">Miner</dt>
-                  <dd class="font-mono mt-1"><%= miner_address(@block) %></dd>
+                  <dd class="font-mono mt-1 break-all text-xs sm:text-sm"><%= miner_address(@block) %></dd>
                 </div>
                 <div>
                   <dt class="text-gray-500">Input count</dt>
@@ -118,11 +123,11 @@ defmodule ZcashExplorerWeb.BlockLive do
                 </div>
                 <div>
                   <dt class="text-gray-500">Input total</dt>
-                  <dd class="mt-1"><%= format_zec(input_total(@block, @full_cache)) %> ZEC</dd>
+                  <dd class="mt-1 text-xs sm:text-sm"><%= format_zec(input_total(@block, @full_cache)) %> ZEC</dd>
                 </div>
                 <div>
                   <dt class="text-gray-500">Output total</dt>
-                  <dd class="mt-1"><%= format_zec(output_total(@block)) %> ZEC</dd>
+                  <dd class="mt-1 text-xs sm:text-sm"><%= format_zec(output_total(@block)) %> ZEC</dd>
                 </div>
                 <div>
                   <dt class="text-gray-500">Total Fees</dt>
@@ -131,64 +136,103 @@ defmodule ZcashExplorerWeb.BlockLive do
               </dl>
             </div>
 
-            <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
-              <h3 class="font-semibold mb-4">Technical Details</h3>
-              <dl class="space-y-4 text-sm">
-                <div class="flex justify-between"><dt class="text-gray-500">Difficulty</dt><dd><%= @block && @block.difficulty %></dd></div>
-                <div class="flex justify-between"><dt class="text-gray-500">Size</dt><dd><%= @block && @block.size %> bytes</dd></div>
-                <div class="flex justify-between"><dt class="text-gray-500">Version</dt><dd><%= @block && @block.version %></dd></div>
-                <div class="flex justify-between"><dt class="text-gray-500">Confirmations</dt><dd><%= @block && @block.confirmations %></dd></div>
-                <div class="flex justify-between"><dt class="text-gray-500">Bits</dt><dd class="font-mono"><%= @block && @block.bits %></dd></div>
-                <div class="flex justify-between"><dt class="text-gray-500">Merkle root</dt><dd class="font-mono break-all"><%= @block && @block.merkleroot %></dd></div>
-                <div class="flex justify-between"><dt class="text-gray-500">Chainwork</dt><dd class="font-mono"><%= @block && @block.chainwork %></dd></div>
-                <div class="flex justify-between"><dt class="text-gray-500">Nonce</dt><dd class="font-mono"><%= @block && @block.nonce %></dd></div>
+            <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-4 sm:p-6">
+              <h3 class="font-semibold mb-3 sm:mb-4">Technical Details</h3>
+              <dl class="space-y-2.5 sm:space-y-4 text-sm">
+                <div class="flex justify-between gap-2">
+                  <dt class="text-gray-500 shrink-0">Difficulty</dt>
+                  <dd class="text-right"><%= @block && @block.difficulty %></dd>
+                </div>
+                <div class="flex justify-between gap-2">
+                  <dt class="text-gray-500 shrink-0">Size</dt>
+                  <dd><%= @block && @block.size %> bytes</dd>
+                </div>
+                <div class="flex justify-between gap-2">
+                  <dt class="text-gray-500 shrink-0">Version</dt>
+                  <dd><%= @block && @block.version %></dd>
+                </div>
+                <div class="flex justify-between gap-2">
+                  <dt class="text-gray-500 shrink-0">Confirmations</dt>
+                  <dd><%= @block && @block.confirmations %></dd>
+                </div>
+                <div class="flex justify-between gap-2">
+                  <dt class="text-gray-500 shrink-0">Bits</dt>
+                  <dd class="font-mono"><%= @block && @block.bits %></dd>
+                </div>
+                <div>
+                  <dt class="text-gray-500">Merkle root</dt>
+                  <dd class="font-mono break-all text-xs sm:text-sm mt-0.5"><%= @block && @block.merkleroot %></dd>
+                </div>
+                <div>
+                  <dt class="text-gray-500">Chainwork</dt>
+                  <dd class="font-mono break-all text-xs sm:text-sm mt-0.5"><%= @block && @block.chainwork %></dd>
+                </div>
+                <div>
+                  <dt class="text-gray-500">Nonce</dt>
+                  <dd class="font-mono break-all text-xs sm:text-sm mt-0.5"><%= @block && @block.nonce %></dd>
+                </div>
               </dl>
             </div>
           </div>
 
-          <h2 class="text-lg font-semibold mt-10 mb-4">Transactions included in this block</h2>
+          <h2 class="text-base sm:text-lg font-semibold mt-6 sm:mt-10 mb-3 sm:mb-4">
+            Transactions included in this block
+          </h2>
+
           <div class="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden">
-            <table class="w-full text-sm">
-              <thead class="bg-gray-50 dark:bg-gray-700">
-                <tr>
-                  <th class="px-6 py-3 text-left">BLOCK#</th>
-                  <th class="px-6 py-3 text-left">HASH</th>
-                  <th class="px-6 py-3 text-right">INPUTS</th>
-                  <th class="px-6 py-3 text-right">OUTPUTS</th>
-                  <th class="px-6 py-3 text-right">OUTPUT (ZEC)</th>
-                  <th class="px-6 py-3 text-right">FEE (ZEC)</th>
-                  <th class="px-6 py-3 text-left">TX TYPE</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-                <%= for tx <- @block && @block.tx || [] do %>
-                  <tr class="hover:bg-gray-50 dark:hover:bg-gray-700">
-                    <td class="px-6 py-4 font-medium"><%= @block && @block.height %></td>
-                    <td class="px-6 py-4 font-mono text-indigo-600 hover:text-indigo-500">
-                      <a href={tx_link(tx)}><%= tx.txid %></a>
-                    </td>
-                    <td class="px-6 py-4 text-right"><%= length(tx.vin || []) %></td>
-                    <td class="px-6 py-4 text-right"><%= length(tx.vout || []) %></td>
-                    <td class="px-6 py-4 text-right font-medium"><%= format_zec(tx_output_total(tx)) %></td>
-                    <td class="px-6 py-4 text-right font-medium"><%= format_zec(tx_fee(tx, @full_cache)) %></td>
-                    <td class="px-6 py-4">
-                      <div class="flex items-center gap-1.5 flex-wrap">
-                        <%= tx_type(tx) %>
-                        <%= for badge <- pool_badges(tx) do %>
-                          <%= badge %>
-                        <% end %>
-                      </div>
-                    </td>
+            <div class="overflow-x-auto">
+              <table class="w-full text-xs sm:text-sm min-w-[640px]">
+                <thead class="bg-gray-50 dark:bg-gray-700">
+                  <tr>
+                    <th class="px-2 sm:px-4 py-2 sm:py-3 text-left">HASH</th>
+                    <th class="px-2 sm:px-4 py-2 sm:py-3 text-right">Public Input</th>
+                    <th class="px-2 sm:px-4 py-2 sm:py-3 text-right">Public Output</th>
+                    <th class="px-2 sm:px-4 py-2 sm:py-3 text-right">Δ Transparent</th>
+                    <th class="px-2 sm:px-4 py-2 sm:py-3 text-left">TX Type</th>
                   </tr>
-                <% end %>
-              </tbody>
-            </table>
+                </thead>
+                <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                  <%= for tx <- @block && @block.tx || [] do %>
+                    <% in_total = tx_in_total(tx, @full_cache) %>
+                    <% out_total = tx_output_total(tx) %>
+                    <% {delta, kind} = tx_delta(tx, in_total, out_total) %>
+                    <tr class="hover:bg-gray-50 dark:hover:bg-gray-700">
+                      <td class="px-2 sm:px-4 py-2 sm:py-4 font-mono text-indigo-600 hover:text-indigo-500">
+                        <a href={tx_link(tx)} class="sm:hidden"><%= String.slice(tx.txid, 0, 10) %>…</a>
+                        <a href={tx_link(tx)} class="hidden sm:inline"><%= tx.txid %></a>
+                      </td>
+                      <td class="px-2 sm:px-4 py-2 sm:py-4 text-right whitespace-nowrap">
+                        <%= format_zec(in_total) %>
+                      </td>
+                      <td class="px-2 sm:px-4 py-2 sm:py-4 text-right whitespace-nowrap">
+                        <%= format_zec(out_total) %>
+                      </td>
+                      <td class="px-2 sm:px-4 py-2 sm:py-4 text-right whitespace-nowrap">
+                        <span class={delta_class(delta, kind)}>
+                          <%= format_delta(delta, kind) %>
+                        </span>
+                      </td>
+                      <td class="px-2 sm:px-4 py-2 sm:py-4">
+                        <div class="flex items-center gap-1 sm:gap-1.5 flex-wrap">
+                          <%= tx_type(tx) %>
+                          <%= for badge <- pool_badges(tx) do %>
+                            <%= badge %>
+                          <% end %>
+                        </div>
+                      </td>
+                    </tr>
+                  <% end %>
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       </body>
     </html>
     """
   end
+
+  # ── Helpers ──────────────────────────────────────────────────────────────
 
   defp collect_prev_txids(block_txs) do
     block_txs
@@ -213,16 +257,12 @@ defmodule ZcashExplorerWeb.BlockLive do
   end
 
   defp input_count(nil), do: 0
-
   defp input_count(block),
     do: Enum.reduce(block.tx || [], 0, fn tx, acc -> acc + length(tx.vin || []) end)
 
   defp output_count(nil), do: 0
-
   defp output_count(block),
     do: Enum.reduce(block.tx || [], 0, fn tx, acc -> acc + length(tx.vout || []) end)
-
-  # ── Fixed Input / Output totals ──────────────────────────────────────────
 
   defp input_total(nil, _full_cache), do: 0.0
 
@@ -239,27 +279,68 @@ defmodule ZcashExplorerWeb.BlockLive do
 
   defp output_total(block) do
     (block.tx || [])
-    |> Enum.reduce(0.0, fn tx, acc ->
-      acc + tx_output_total(tx)
-    end)
+    |> Enum.reduce(0.0, fn tx, acc -> acc + tx_output_total(tx) end)
   end
 
   defp tx_output_total(nil), do: 0.0
 
   defp tx_output_total(tx) do
-    Enum.reduce(tx.vout || [], 0.0, fn vout, acc ->
-      acc + (vout.value || 0.0)
-    end)
+    Enum.reduce(tx.vout || [], 0.0, fn vout, acc -> acc + (vout.value || 0.0) end)
   end
+
+  defp tx_in_total(tx, full_cache) do
+    full = Map.get(full_cache, tx.txid) || %{}
+    calculate_vin_sum(full, full_cache) / 100_000_000.0
+  end
+
+  defp tx_delta(tx, in_total, out_total) do
+    pools = pool_list(tx)
+    coinbase? = is_coinbase_struct?(tx)
+
+    only_transparent? =
+      (pools == [] or pools == ["transparent"]) and not coinbase?
+
+    if only_transparent? do
+      {abs(out_total - in_total), "fee"}
+    else
+      {out_total - in_total, "flow"}
+    end
+  end
+
+  defp is_coinbase_struct?(tx) do
+    vin = tx.vin || []
+    vin != [] and (Map.get(hd(vin), :coinbase) != nil or Map.get(hd(vin), "coinbase") != nil)
+  end
+
+  defp format_delta(nil, _), do: "0.00000000"
+
+  defp format_delta(n, "fee") when is_number(n),
+    do: :erlang.float_to_binary(abs(n) * 1.0, decimals: 8)
+
+  defp format_delta(n, _) when is_number(n) and n > 0,
+    do: "+#{:erlang.float_to_binary(n * 1.0, decimals: 8)}"
+
+  defp format_delta(n, _) when is_number(n),
+    do: :erlang.float_to_binary(n * 1.0, decimals: 8)
+
+  defp format_delta(_, _), do: "0.00000000"
+
+  defp delta_class(_, "fee"), do: "text-gray-500"
+
+  defp delta_class(n, _) when is_number(n) and n > 0.00000001,
+    do: "text-emerald-600 dark:text-emerald-400"
+
+  defp delta_class(n, _) when is_number(n) and n < -0.00000001,
+    do: "text-amber-600 dark:text-amber-400"
+
+  defp delta_class(_, _), do: "text-gray-500"
 
   defp tx_link(tx), do: "/transactions/#{tx.txid}"
 
   defp total_fees(nil, _full_cache), do: 0.0
 
   defp total_fees(block, full_cache) do
-    Enum.reduce(block.tx || [], 0.0, fn tx, acc ->
-      acc + tx_fee(tx, full_cache)
-    end)
+    Enum.reduce(block.tx || [], 0.0, fn tx, acc -> acc + tx_fee(tx, full_cache) end)
   end
 
   defp tx_fee(nil, _full_cache), do: 0.0
@@ -298,9 +379,7 @@ defmodule ZcashExplorerWeb.BlockLive do
   end
 
   defp calculate_vout_sum(full_tx) do
-    Enum.reduce(full_tx["vout"] || [], 0, fn vout, acc ->
-      acc + safe_zats(vout)
-    end)
+    Enum.reduce(full_tx["vout"] || [], 0, fn vout, acc -> acc + safe_zats(vout) end)
   end
 
   defp calculate_vpub_old(full_tx) do
