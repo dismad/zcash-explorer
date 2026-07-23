@@ -126,12 +126,13 @@ defmodule ZcashExplorerWeb.TransactionHelper do
         "transparent"
 
       # Last resort: non-nil pool object (covers stripped action lists)
-      is_map(ironwood) and map_size(ironwood) > 0 ->
-        "ironwood"
 
-      is_map(orchard) and map_size(orchard) > 0 and has_pool?(orchard) ->
-        "orchard"
+      is_map(ironwood) and has_pool?(ironwood) ->
+  "ironwood"
 
+is_map(orchard) and has_pool?(orchard) ->
+  "orchard"
+    
       true ->
         "mixed"
     end
@@ -156,19 +157,19 @@ defmodule ZcashExplorerWeb.TransactionHelper do
 
   defp is_coinbase?(_), do: false
 
-  defp has_pool?(nil), do: false
+ defp has_pool?(nil), do: false
 
-  defp has_pool?(pool) when is_map(pool) do
-    actions = Map.get(pool, "actions") || Map.get(pool, :actions) || []
-    n_actions = Map.get(pool, "nActions") || Map.get(pool, :nActions) || 0
-    zat = Map.get(pool, "valueBalanceZat") || Map.get(pool, :valueBalanceZat)
+defp has_pool?(pool) when is_map(pool) do
+  actions = Map.get(pool, "actions") || Map.get(pool, :actions) || []
+  n_actions = Map.get(pool, "nActions") || Map.get(pool, :nActions) || 0
+  zat = Map.get(pool, "valueBalanceZat") || Map.get(pool, :valueBalanceZat)
 
-    (is_list(actions) and actions != []) or
-      (is_integer(n_actions) and n_actions > 0) or
-      is_integer(zat)
-  end
+  (is_list(actions) and actions != []) or
+    (is_integer(n_actions) and n_actions > 0) or
+    (is_integer(zat) and zat != 0)
+end
 
-  defp has_pool?(_), do: false
+defp has_pool?(_), do: false
 
   defp has_sapling?(tx) do
     (Map.get(tx, "vShieldedSpend") || Map.get(tx, :vShieldedSpend) || []) != [] or
