@@ -10,29 +10,30 @@ defmodule ZcashExplorerWeb.RawMempoolLive do
 
     if connected?(socket), do: Process.send_after(self(), :update, 5000)
 
-    case Cachex.get(:app_cache, "raw_mempool") do
-      {:ok, mempool} ->
-        {:ok,
-         assign(socket,
-           raw_mempool: mempool,
-           zcash_network: network,
-           standalone: standalone
-         )}
+    mempool =
+      case Cachex.get(:app_cache, "raw_mempool") do
+        {:ok, data} when is_list(data) -> data
+        _ -> []
+      end
 
-      _ ->
-        {:ok,
-         assign(socket,
-           raw_mempool: [],
-           zcash_network: network,
-           standalone: standalone
-         )}
-    end
+    {:ok,
+     assign(socket,
+       raw_mempool: mempool,
+       zcash_network: network,
+       standalone: standalone
+     )}
   end
 
   @impl true
   def handle_info(:update, socket) do
     Process.send_after(self(), :update, 5000)
-    {:ok, mempool} = Cachex.get(:app_cache, "raw_mempool")
+
+    mempool =
+      case Cachex.get(:app_cache, "raw_mempool") do
+        {:ok, data} when is_list(data) -> data
+        _ -> []
+      end
+
     {:noreply, assign(socket, :raw_mempool, mempool)}
   end
 
@@ -45,8 +46,10 @@ defmodule ZcashExplorerWeb.RawMempoolLive do
         <meta charset="UTF-8">
         <meta http-equiv="X-UA-Compatible" content="IE=edge">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta name="csrf-token" content={Plug.CSRFProtection.get_csrf_token()} />
         <title>Mempool - Zcash Explorer</title>
         <link rel="stylesheet" href="/assets/app.css">
+        <script defer phx-track-static type="text/javascript" src="/js/app.js"></script>
       </head>
       <body class="bg-gray-50 dark:bg-gray-900">
         <%= if @standalone do %>
@@ -63,7 +66,6 @@ defmodule ZcashExplorerWeb.RawMempoolLive do
             </div>
           </header>
         <% end %>
-
         <div class="w-full">
           <div class="shadow overflow-hidden border-gray-200 rounded-lg overflow-x-auto">
             <table class="w-full text-sm text-left text-gray-500 dark:text-gray-400">
@@ -84,25 +86,21 @@ defmodule ZcashExplorerWeb.RawMempoolLive do
                       <a href={"/transactions/#{tx["txid"]}"}><%= tx["txid"] %></a>
                     </td>
                     <td class="px-4 py-4 whitespace-nowrap text-sm font-medium">
-                      <%= tx["info"]["height"] %>
+                      <%= get_in(tx, ["info", "height"]) %>
                     </td>
                     <td class="px-4 py-4 whitespace-nowrap text-sm font-medium">
-                      <%= mined_time_rel(tx["info"]["time"]) %>
+                      <%= mined_time_rel(get_in(tx, ["info", "time"])) %>
                     </td>
                     <td class="px-4 py-4 whitespace-nowrap text-sm font-medium">
-                      <%= format_mempool_fee(tx["info"]["fee"]) %>
+                      <%= format_mempool_fee(get_in(tx, ["info", "fee"])) %>
                     </td>
                     <td class="px-4 py-4 whitespace-nowrap text-sm font-medium">
-                      <%= tx["info"]["size"] %>
+                      <%= get_in(tx, ["info", "size"]) %>
                     </td>
                     <td class="px-4 py-4">
                       <div class="flex items-center gap-1.5 flex-wrap">
-                        <%= if match?({:safe, _}, tx["type"]) do %>
-                          <%= raw(elem(tx["type"], 1)) %>
-                        <% else %>
-                          <%= tx_type(tx) %>
-                        <% end %>
-                        <%= for pool <- (tx["pools"] || []) do %>
+                        <%= tx_type(tx) %>
+                        <%= for pool <- pools_for(tx) do %>
                           <%= pool_badge(pool) %>
                         <% end %>
                       </div>
@@ -117,6 +115,15 @@ defmodule ZcashExplorerWeb.RawMempoolLive do
     </html>
     """
   end
+
+  defp pools_for(tx) when is_map(tx) do
+    case Map.get(tx, "pools") || Map.get(tx, :pools) do
+      pools when is_list(pools) and pools != [] -> pools
+      _ -> pool_list(tx)
+    end
+  end
+
+  defp pools_for(_), do: []
 
   defp mined_time_rel(unix_timestamp) when is_integer(unix_timestamp) do
     Timex.from_unix(unix_timestamp) |> Timex.format!("{relative}", :relative)
