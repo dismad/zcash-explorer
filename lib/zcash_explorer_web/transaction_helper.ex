@@ -67,10 +67,10 @@ defmodule ZcashExplorerWeb.TransactionHelper do
   def pool_badges(_), do: []
 
   def pool_badge("transparent") do
-    raw(
-      ~S{<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium bg-red-50 text-red-700 dark:bg-red-900/40 dark:text-red-300">Transparent</span>}
-    )
-  end
+  raw(
+    ~S{<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium bg-amber-50 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200">Transparent</span>}
+  )
+end
 
   def pool_badge("sprout") do
     raw(
