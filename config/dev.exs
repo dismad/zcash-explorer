@@ -22,8 +22,9 @@ config :zcash_explorer, ZcashExplorerWeb.Endpoint,
 
 # Zebra + cookie authentication (safe version)
 config :zcash_explorer, Zcashex,
-  zcashd_hostname: "localhost",
-  zcashd_port: "8232",
+  zcashd_hostname: System.get_env("ZCASHD_HOSTNAME", "localhost"),
+  zcashd_port: System.get_env("ZCASHD_PORT", "8232"),
+  zcash_network: System.get_env("ZCASH_NETWORK", "mainnet"),
   zcashd_username:
     (fn ->
        cookie_path = System.get_env("ZCASH_RPC_COOKIE_FILE", "/var/lib/zebrad-rpc/.cookie")
@@ -54,5 +55,4 @@ config :zcash_explorer, Zcashex,
          _ ->
            ""
        end
-     end).(),
-  zcash_network: "mainnet"
+     end).() 
