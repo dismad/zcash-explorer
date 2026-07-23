@@ -123,64 +123,63 @@ end
 
   def pool_badge(_), do: raw("")
 
-  defp detect_type(tx) do
-    vin = Map.get(tx, "vin") || Map.get(tx, :vin) || []
-    vout = Map.get(tx, "vout") || Map.get(tx, :vout) || []
-    vjoinsplit = Map.get(tx, "vjoinsplit") || Map.get(tx, :vjoinsplit) || []
-    orchard = pool_field(tx, :orchard)
-    ironwood = pool_field(tx, :ironwood)
+ defp detect_type(tx) do
+  vin = Map.get(tx, "vin") || Map.get(tx, :vin) || []
+  vout = Map.get(tx, "vout") || Map.get(tx, :vout) || []
+  vjoinsplit = Map.get(tx, "vjoinsplit") || Map.get(tx, :vjoinsplit) || []
+  orchard = pool_field(tx, :orchard)
+  ironwood = pool_field(tx, :ironwood)
 
-    value_zat = Map.get(tx, "valueBalanceZat") || Map.get(tx, :valueBalanceZat) || 0
-    orchard_zat = get_pool_zat(orchard)
-    ironwood_zat = get_pool_zat(ironwood)
+  value_zat = Map.get(tx, "valueBalanceZat") || Map.get(tx, :valueBalanceZat) || 0
+  orchard_zat = get_pool_zat(orchard)
+  ironwood_zat = get_pool_zat(ironwood)
 
-    has_transparent_out = length(vout) > 0
-    pools = Map.get(tx, "pools") || Map.get(tx, :pools) || []
+  pools = Map.get(tx, "pools") || Map.get(tx, :pools) || []
+  stored = Map.get(tx, "type") || Map.get(tx, :type)
+  stored = if is_binary(stored), do: stored, else: nil
 
-    stored = Map.get(tx, "type") || Map.get(tx, :type)
-    stored = if is_binary(stored), do: stored, else: nil
+  coinbase? = is_coinbase?(tx) or stored == "coinbase"
+  has_t_in = not coinbase? and length(vin) > 0
+  has_t_out = length(vout) > 0
 
-    cond do
-      is_coinbase?(tx) or stored == "coinbase" ->
-        "coinbase"
+  has_z =
+    has_pool?(ironwood) or has_pool?(orchard) or has_sapling?(tx) or
+      (is_list(vjoinsplit) and vjoinsplit != []) or
+      Enum.any?(pools, &(&1 in @pure_shielded_pools))
 
-      stored in ["shielding", "deshielding", "transparent"] ->
-        stored
+  into_shielded? = value_zat < 0 or orchard_zat < 0 or ironwood_zat < 0
+  out_of_shielded? = value_zat > 0 or orchard_zat > 0 or ironwood_zat > 0
 
-      is_list(vjoinsplit) and vjoinsplit != [] and not has_transparent_out and length(vin) == 0 ->
-        "shielded"
+  cond do
+    coinbase? ->
+      "coinbase"
 
-      length(vjoinsplit) > 0 ->
-        "sprout"
+    stored in ["shielding", "deshielding", "transparent", "shielded"] ->
+      stored
 
-      (value_zat > 0 || orchard_zat > 0 || ironwood_zat > 0) && has_transparent_out ->
-        "deshielding"
+    # Transparent → shielded (any pool, including Ironwood)
+    has_t_in and has_z and (not has_t_out or into_shielded?) ->
+      "shielding"
 
-      value_zat < 0 || orchard_zat < 0 || ironwood_zat < 0 ->
-        "shielding"
+    # Shielded → transparent
+    has_z and has_t_out and (not has_t_in or out_of_shielded?) ->
+      "deshielding"
 
-      has_pool?(ironwood) ->
-        "shielded"
+    # Pure shielded or cross-pool (Ironwood ↔ Sapling, etc.)
+    has_z and not has_t_in and not has_t_out ->
+      "shielded"
 
-      has_pool?(orchard) ->
-        "shielded"
+    has_t_in and has_t_out and not has_z ->
+      "transparent"
 
-      has_sapling?(tx) ->
-        "shielded"
+    has_t_in and has_t_out and has_z ->
+      # both sides present without clear balance sign
+      if into_shielded?, do: "shielding", else: if(out_of_shielded?, do: "deshielding", else: "mixed")
 
-      Enum.any?(pools, &(&1 in @pure_shielded_pools)) and "transparent" not in pools ->
-        "shielded"
-
-      length(vin) > 0 && length(vout) > 0 ->
-        "transparent"
-
-      "transparent" in pools and not Enum.any?(pools, &(&1 in @pure_shielded_pools)) ->
-        "transparent"
-
-      true ->
-        "mixed"
-    end
+    true ->
+      "mixed"
   end
+end
 
   defp pool_field(tx, key) when is_atom(key) do
     Map.get(tx, key) || Map.get(tx, Atom.to_string(key))
