@@ -195,10 +195,11 @@ Open: **http://localhost:4000**
 ## Quick RPC check
 
 ```bash
-curl -s --user "$(cat "$ZCASH_RPC_COOKIE_FILE")" \
+COOKIE="$(tr -d '\n' < "$ZCASH_RPC_COOKIE_FILE")"
+curl -s --user "$COOKIE" \
   --data-binary '{"jsonrpc":"2.0","id":1,"method":"getblockcount","params":[]}' \
   -H 'content-type: application/json' \
-  http://127.0.0.1:8232/
+  "http://127.0.0.1:${ZCASHD_PORT:-8232}/"
 ```
 
 You should get a block height. Fix Zebra RPC / cookie path before debugging the explorer if this fails.
