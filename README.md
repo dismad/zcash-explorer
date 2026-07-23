@@ -21,11 +21,15 @@ Talks to a local **Zebra** (or zcashd) node over RPC.
 ```bash
 sudo apt update
 sudo apt install -y \
-  build-essential autoconf m4 \
-  libncurses-dev libwxgtk3.2-dev libgl1-mesa-dev libglu1-mesa-dev \
-  libpng-dev libssh-dev unixodbc-dev xsltproc fop libxml2-utils \
-  openjdk-17-jdk \
-  git curl unzip inotify-tools
+  build-essential \
+  autoconf \
+  m4 \
+  libncurses-dev \
+  libssl-dev \
+  git \
+  curl \
+  unzip \
+  inotify-tools
 ```
 
 ---
