@@ -275,19 +275,34 @@ defp extract_miner_tag(hex) when is_binary(hex) do
 
   case Base.decode16(hex, case: :mixed) do
     {:ok, bin} ->
-      # Interpret as UTF-8 (emojis, pool names, etc.)
-      string =
-        case String.normalize(bin, :nfc) do
-          s when is_binary(s) -> s
-          _ -> :unicode.characters_to_binary(bin, :latin1, :utf8) |> to_string()
-        end
+      bin
+      |> :binary.bin_to_list()
+      # group into runs of printable ASCII or high bytes (UTF-8)
+      |> Enum.chunk_by(fn b -> (b >= 32 and b <= 126) or b >= 0x80 end)
+      |> Enum.filter(fn
+        # ASCII run, at least 3 chars
+        [b | _] = chunk when b >= 32 and b <= 126 -> length(chunk) >= 3
+        # high-byte run (possible UTF-8), keep if it decodes
+        [b | _] = chunk when b >= 0x80 -> length(chunk) >= 1
+        _ -> false
+      end)
+      |> Enum.map(fn chunk ->
+        bytes = :binary.list_to_bin(chunk)
 
-      string
-      # split on control / non-printable runs
-      |> String.split(~r/[\x00-\x1F\x7F]+/u, trim: true)
+        cond do
+          String.valid?(bytes) ->
+            bytes
+
+          true ->
+            # keep printable ASCII only from messy chunks
+            chunk
+            |> Enum.filter(&(&1 >= 32 and &1 <= 126))
+            |> List.to_string()
+        end
+      end)
       |> Enum.map(&String.trim/1)
       |> Enum.reject(fn s ->
-        s == "" or Regex.match?(~r/^\d+$/u, s)
+        s == "" or Regex.match?(~r/^\d+$/, s)
       end)
       |> List.last()
 
