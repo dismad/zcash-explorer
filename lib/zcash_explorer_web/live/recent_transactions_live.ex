@@ -1,6 +1,5 @@
 defmodule ZcashExplorerWeb.RecentTransactionsLive do
   use Phoenix.LiveView, layout: false
-  import Phoenix.HTML
   import ZcashExplorerWeb.TransactionHelper
 
   @impl true
