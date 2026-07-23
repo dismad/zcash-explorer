@@ -5,10 +5,14 @@ defmodule ZcashExplorerWeb.TransactionHelper do
     pre_computed = Map.get(tx, "type") || Map.get(tx, :type)
     detected = detect_type(tx)
 
-    # Prefer live detection when precomputed is missing, unknown, or mixed
-    # (warmers often stamped "mixed" before Ironwood was recognized)
+    # Pure pool names from warmers → treat as shielded (chips carry the pool)
+    pure_pools = ["ironwood", "orchard", "sapling", "sprout"]
+
     type =
       cond do
+        is_binary(pre_computed) and pre_computed in pure_pools ->
+          "shielded"
+
         is_binary(pre_computed) and pre_computed not in ["unknown", "mixed", ""] ->
           pre_computed
 
@@ -23,11 +27,13 @@ defmodule ZcashExplorerWeb.TransactionHelper do
 
   def pool_list(tx) when is_map(tx) do
     vin = Map.get(tx, "vin") || Map.get(tx, :vin) || []
+    vjoinsplit = Map.get(tx, "vjoinsplit") || Map.get(tx, :vjoinsplit) || []
 
     has_transparent =
       length(vin) > 0 or
         length(Map.get(tx, "vout") || Map.get(tx, :vout) || []) > 0
 
+    has_sprout = is_list(vjoinsplit) and vjoinsplit != []
     has_sapling = has_sapling?(tx)
 
     orchard = pool_field(tx, :orchard)
@@ -39,6 +45,7 @@ defmodule ZcashExplorerWeb.TransactionHelper do
     list =
       []
       |> then(fn l -> if has_transparent, do: ["transparent" | l], else: l end)
+      |> then(fn l -> if has_sprout, do: ["sprout" | l], else: l end)
       |> then(fn l -> if has_sapling, do: ["sapling" | l], else: l end)
       |> then(fn l -> if has_orchard, do: ["orchard" | l], else: l end)
       |> then(fn l -> if has_ironwood, do: ["ironwood" | l], else: l end)
@@ -62,6 +69,12 @@ defmodule ZcashExplorerWeb.TransactionHelper do
   def pool_badge("transparent") do
     raw(
       ~S{<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium bg-red-50 text-red-700 dark:bg-red-900/40 dark:text-red-300">Transparent</span>}
+    )
+  end
+
+  def pool_badge("sprout") do
+    raw(
+      ~S{<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium bg-purple-50 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300">Sprout</span>}
     )
   end
 
@@ -103,10 +116,14 @@ defmodule ZcashExplorerWeb.TransactionHelper do
       is_coinbase ->
         "coinbase"
 
+      # Pure Sprout → Shielded (chip shows Sprout)
+      is_list(vjoinsplit) and vjoinsplit != [] and not has_transparent_out and
+          length(vin) == 0 ->
+        "shielded"
+
       length(vjoinsplit) > 0 ->
         "sprout"
 
-      # Only deshielding when value leaves a pool AND there is a transparent output
       (value_zat > 0 || orchard_zat > 0 || ironwood_zat > 0) && has_transparent_out ->
         "deshielding"
 
@@ -114,31 +131,22 @@ defmodule ZcashExplorerWeb.TransactionHelper do
         "shielding"
 
       has_pool?(ironwood) ->
-        "ironwood"
+        "shielded"
 
       has_pool?(orchard) ->
-        "orchard"
+        "shielded"
 
       has_sapling?(tx) ->
-        "sapling"
+        "shielded"
 
       length(vin) > 0 && length(vout) > 0 ->
         "transparent"
 
-      # Last resort: non-nil pool object (covers stripped action lists)
-
-      is_map(ironwood) and has_pool?(ironwood) ->
-  "ironwood"
-
-is_map(orchard) and has_pool?(orchard) ->
-  "orchard"
-    
       true ->
         "mixed"
     end
   end
 
-  # Accept atom or string keys; works on raw RPC maps and structs
   defp pool_field(tx, key) when is_atom(key) do
     Map.get(tx, key) || Map.get(tx, Atom.to_string(key))
   end
@@ -157,19 +165,19 @@ is_map(orchard) and has_pool?(orchard) ->
 
   defp is_coinbase?(_), do: false
 
- defp has_pool?(nil), do: false
+  defp has_pool?(nil), do: false
 
-defp has_pool?(pool) when is_map(pool) do
-  actions = Map.get(pool, "actions") || Map.get(pool, :actions) || []
-  n_actions = Map.get(pool, "nActions") || Map.get(pool, :nActions) || 0
-  zat = Map.get(pool, "valueBalanceZat") || Map.get(pool, :valueBalanceZat)
+  defp has_pool?(pool) when is_map(pool) do
+    actions = Map.get(pool, "actions") || Map.get(pool, :actions) || []
+    n_actions = Map.get(pool, "nActions") || Map.get(pool, :nActions) || 0
+    zat = Map.get(pool, "valueBalanceZat") || Map.get(pool, :valueBalanceZat)
 
-  (is_list(actions) and actions != []) or
-    (is_integer(n_actions) and n_actions > 0) or
-    (is_integer(zat) and zat != 0)
-end
+    (is_list(actions) and actions != []) or
+      (is_integer(n_actions) and n_actions > 0) or
+      (is_integer(zat) and zat != 0)
+  end
 
-defp has_pool?(_), do: false
+  defp has_pool?(_), do: false
 
   defp has_sapling?(tx) do
     (Map.get(tx, "vShieldedSpend") || Map.get(tx, :vShieldedSpend) || []) != [] or
@@ -193,19 +201,9 @@ defp has_pool?(_), do: false
           ~S{<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gradient-to-r from-emerald-400 to-amber-200 text-gray-900 capitalize">Deshielding (Z-T)</span>}
         )
 
-      "ironwood" ->
+      "shielded" ->
         raw(
-          ~S{<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-500 text-white capitalize">Ironwood</span>}
-        )
-
-      "orchard" ->
-        raw(
-          ~S{<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-400 text-gray-900 capitalize">Orchard</span>}
-        )
-
-      "sapling" ->
-        raw(
-          ~S{<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-400 text-gray-900 capitalize">Sapling</span>}
+          ~S{<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-teal-400 text-gray-900 capitalize">Shielded</span>}
         )
 
       "sprout" ->
