@@ -109,10 +109,19 @@ defmodule ZcashExplorerWeb.BlockLive do
                   <dt class="text-gray-500">Height</dt>
                   <dd class="font-semibold mt-1"><%= @block && @block.height %></dd>
                 </div>
-                <div class="col-span-2 sm:col-span-1">
-                  <dt class="text-gray-500">Miner</dt>
-                  <dd class="font-mono mt-1 break-all text-xs sm:text-sm"><%= miner_address(@block) %></dd>
-                </div>
+               <div class="col-span-2 sm:col-span-1">
+		  <dt class="text-gray-500">Miner</dt>
+		  <dd class="mt-1 space-y-0.5">
+		    <%= if name = miner_name(@block) do %>
+		      <div class="font-semibold text-sm text-gray-900 dark:text-gray-100">
+			<%= name %>
+		      </div>
+		    <% end %>
+		    <div class="font-mono break-all text-xs sm:text-sm text-gray-600 dark:text-gray-300">
+		      <%= miner_address(@block) %>
+		    </div>
+		  </dd>
+		</div>
                 <div>
                   <dt class="text-gray-500">Input count</dt>
                   <dd class="mt-1"><%= input_count(@block) %></dd>
@@ -233,6 +242,59 @@ defmodule ZcashExplorerWeb.BlockLive do
   end
 
   # ── Helpers ──────────────────────────────────────────────────────────────
+
+defp miner_name(nil), do: nil
+
+defp miner_name(block) do
+  coinbase_hex = get_coinbase_hex(block)
+  extract_miner_tag(coinbase_hex)
+end
+
+defp get_coinbase_hex(block) do
+  tx = List.first(block.tx || [])
+
+  vin =
+    cond do
+      is_map(tx) and Map.has_key?(tx, :vin) -> List.first(tx.vin || [])
+      is_map(tx) and Map.has_key?(tx, "vin") -> List.first(tx["vin"] || [])
+      true -> nil
+    end
+
+  cond do
+    is_nil(vin) -> nil
+    is_map(vin) -> Map.get(vin, :coinbase) || Map.get(vin, "coinbase")
+    true -> nil
+  end
+end
+
+defp extract_miner_tag(nil), do: nil
+defp extract_miner_tag(""), do: nil
+
+defp extract_miner_tag(hex) when is_binary(hex) do
+  hex = String.replace(hex, ~r/[^0-9a-fA-F]/, "")
+
+  case Base.decode16(hex, case: :mixed) do
+    {:ok, bin} ->
+      # Interpret as UTF-8 (emojis, pool names, etc.)
+      string =
+        case String.normalize(bin, :nfc) do
+          s when is_binary(s) -> s
+          _ -> :unicode.characters_to_binary(bin, :latin1, :utf8) |> to_string()
+        end
+
+      string
+      # split on control / non-printable runs
+      |> String.split(~r/[\x00-\x1F\x7F]+/u, trim: true)
+      |> Enum.map(&String.trim/1)
+      |> Enum.reject(fn s ->
+        s == "" or Regex.match?(~r/^\d+$/u, s)
+      end)
+      |> List.last()
+
+    _ ->
+      nil
+  end
+end
 
   defp collect_prev_txids(block_txs) do
     block_txs
