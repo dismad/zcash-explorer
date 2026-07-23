@@ -1,6 +1,5 @@
 defmodule ZcashExplorerWeb.RecentTransactionsLive do
   use Phoenix.LiveView, layout: false
-  # ← This fixes the "raw/1" error
   import Phoenix.HTML
   import ZcashExplorerWeb.TransactionHelper
 
@@ -64,19 +63,18 @@ defmodule ZcashExplorerWeb.RecentTransactionsLive do
       </head>
       <body class="bg-gray-50 dark:bg-gray-900">
         <%= if @standalone do %>
-        <header class="bg-gradient-to-r from-blue-950 via-blue-900 to-blue-800 text-white sticky top-0 z-50 shadow-md">
-          <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="h-14 flex items-center justify-between">
-              <!-- Logo + Title -->
-              <div class="flex items-center gap-x-3 flex-shrink-0">
-                <a href="/" class="flex items-center">
-                  <img src="/images/zcash-icon-white.svg" class="h-8 w-8" alt="Zcash">
-                </a>
-                <a href="/" class="text-xl font-semibold tracking-tight">Zcash Block Explorer</a>
+          <header class="bg-gradient-to-r from-blue-950 via-blue-900 to-blue-800 text-white sticky top-0 z-50 shadow-md">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+              <div class="h-14 flex items-center justify-between">
+                <div class="flex items-center gap-x-3 flex-shrink-0">
+                  <a href="/" class="flex items-center">
+                    <img src="/images/zcash-icon-white.svg" class="h-8 w-8" alt="Zcash">
+                  </a>
+                  <a href="/" class="text-xl font-semibold tracking-tight">Zcash Block Explorer</a>
+                </div>
               </div>
             </div>
-          </div>
-        </header> 
+          </header>
         <% end %>
 
         <div class="w-full">
@@ -102,12 +100,17 @@ defmodule ZcashExplorerWeb.RecentTransactionsLive do
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm font-medium"><%= tx["time"] %></td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm font-medium"><%= tx["tx_out_total"] %> ZEC</td>
-                    <td class="px-4 py-4 whitespace-nowrap">
-                      <%= if match?({:safe, _}, tx["type"]) do %>
-                        <%= raw(elem(tx["type"], 1)) %>
-                      <% else %>
-                        <%= tx_type(tx) %>
-                      <% end %>
+                    <td class="px-4 py-4">
+                      <div class="flex items-center gap-1.5 flex-wrap">
+                        <%= if match?({:safe, _}, tx["type"]) do %>
+                          <%= raw(elem(tx["type"], 1)) %>
+                        <% else %>
+                          <%= tx_type(tx) %>
+                        <% end %>
+                        <%= for pool <- (tx["pools"] || []) do %>
+                          <%= pool_badge(pool) %>
+                        <% end %>
+                      </div>
                     </td>
                   </tr>
                 <% end %>

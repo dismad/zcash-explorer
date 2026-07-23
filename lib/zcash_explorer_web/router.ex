@@ -43,6 +43,7 @@ defmodule ZcashExplorerWeb.Router do
     live "/metrics/networksolps", NetworkSolpsLive
     live "/live/raw_mempool", RawMempoolLive
     live "/live/orchard_pool", OrchardPoolLive
+    live "/live/ironwood_pool", IronwoodPoolLive
     live "/dev/rpc", RpcDiscoverLive
 
     # Search and Address pages

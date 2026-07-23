@@ -2,14 +2,8 @@ defmodule ZcashExplorer.Transactions.TransactionWarmer do
   use Cachex.Warmer
   require Logger
 
-  @doc """
-  Returns the interval for this warmer.
-  """
   def interval, do: :timer.seconds(15)
 
-  @doc """
-  Executes this cache warmer.
-  """
   def execute(_state) do
     case Zcashex.getblockcount() do
       {:ok, n} ->
@@ -36,8 +30,8 @@ defmodule ZcashExplorer.Transactions.TransactionWarmer do
             "time" => ZcashExplorerWeb.Helpers.mined_time(Map.get(z, :time)),
             "tx_out_total" => ZcashExplorerWeb.Helpers.tx_out_total(z),
             "size" => Map.get(z, :size),
-            # ← New robust helper
-            "type" => ZcashExplorerWeb.TransactionHelper.tx_type(z)
+            "type" => ZcashExplorerWeb.TransactionHelper.tx_type(z),
+            "pools" => ZcashExplorerWeb.TransactionHelper.pool_list(z)
           }
         end)
         |> handle_result

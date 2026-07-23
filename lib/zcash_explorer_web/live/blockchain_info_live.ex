@@ -5,7 +5,6 @@ defmodule ZcashExplorerWeb.BlockChainInfoLive do
   def mount(_params, _session, socket) do
     if connected?(socket), do: Process.send_after(self(), :update, 5000)
 
-    # Assign network so the header works exactly like HomeLive
     network = Application.get_env(:zcash_explorer, Zcashex, [])[:zcash_network] || "mainnet"
 
     case Cachex.get(:app_cache, "metrics") do
@@ -36,6 +35,9 @@ defmodule ZcashExplorerWeb.BlockChainInfoLive do
   defp sprout_value(value_pools), do: value_pools |> get_value_pools() |> Map.get("sprout", 0)
   defp sapling_value(value_pools), do: value_pools |> get_value_pools() |> Map.get("sapling", 0)
   defp orchard_value(value_pools), do: value_pools |> get_value_pools() |> Map.get("orchard", 0)
+  defp ironwood_value(value_pools), do: value_pools |> get_value_pools() |> Map.get("ironwood", 0)
+
+  defp get_value_pools(nil), do: %{}
 
   defp get_value_pools(value_pools) do
     Enum.map(value_pools, fn %{"id" => name, "chainValue" => value} -> {name, value} end)
@@ -56,11 +58,9 @@ defmodule ZcashExplorerWeb.BlockChainInfoLive do
       </head>
       <body class="bg-gray-50 dark:bg-gray-900">
 
-        <!-- ===== EXACT SAME HEADER AS HOMELIVE ===== -->
         <header class="bg-gradient-to-r from-blue-950 via-blue-900 to-blue-800 text-white sticky top-0 z-50 shadow-md">
           <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="h-14 flex items-center justify-between">
-              <!-- Logo + Title -->
               <div class="flex items-center gap-x-3 flex-shrink-0">
                 <a href="/" class="flex items-center">
                   <img src="/images/zcash-icon-white.svg" class="h-8 w-8" alt="Zcash">
@@ -71,7 +71,6 @@ defmodule ZcashExplorerWeb.BlockChainInfoLive do
           </div>
         </header>
 
-        <!-- Page content (your original stats) -->
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <h1 class="text-3xl font-semibold text-gray-900 dark:text-white mb-8">Blockchain Information</h1>
 
@@ -88,18 +87,32 @@ defmodule ZcashExplorerWeb.BlockChainInfoLive do
               <dt class="text-sm font-medium text-gray-500 truncate">Difficulty</dt>
               <dd class="mt-1 text-3xl font-semibold text-gray-900 dark:text-white"><%= @blockchain_info["difficulty"] || "—" %></dd>
             </div>
+
             <div class="px-4 py-5 bg-white shadow rounded-lg overflow-hidden sm:p-6 dark:bg-gray-800">
               <dt class="text-sm font-medium text-gray-500 truncate">Sprout pool</dt>
-              <dd class="mt-1 text-3xl font-semibold text-gray-900 dark:text-white"><%= sprout_value(@blockchain_info["valuePools"]) %> <%= @currency %></dd>
+              <dd class="mt-1 text-3xl font-semibold text-gray-900 dark:text-white">
+                <%= sprout_value(@blockchain_info["valuePools"]) %> <%= @currency %>
+              </dd>
             </div>
             <div class="px-4 py-5 bg-white shadow rounded-lg overflow-hidden sm:p-6 dark:bg-gray-800">
               <dt class="text-sm font-medium text-gray-500 truncate">Sapling pool</dt>
-              <dd class="mt-1 text-3xl font-semibold text-gray-900 dark:text-white"><%= sapling_value(@blockchain_info["valuePools"]) %> <%= @currency %></dd>
+              <dd class="mt-1 text-3xl font-semibold text-gray-900 dark:text-white">
+                <%= sapling_value(@blockchain_info["valuePools"]) %> <%= @currency %>
+              </dd>
             </div>
             <div class="px-4 py-5 bg-white shadow rounded-lg overflow-hidden sm:p-6 dark:bg-gray-800">
               <dt class="text-sm font-medium text-gray-500 truncate">Orchard pool</dt>
-              <dd class="mt-1 text-3xl font-semibold text-gray-900 dark:text-white"><%= orchard_value(@blockchain_info["valuePools"]) %> <%= @currency %></dd>
+              <dd class="mt-1 text-3xl font-semibold text-gray-900 dark:text-white">
+                <%= orchard_value(@blockchain_info["valuePools"]) %> <%= @currency %>
+              </dd>
             </div>
+            <div class="px-4 py-5 bg-white shadow rounded-lg overflow-hidden sm:p-6 dark:bg-gray-800">
+              <dt class="text-sm font-medium text-gray-500 truncate">Ironwood pool</dt>
+              <dd class="mt-1 text-3xl font-semibold text-gray-900 dark:text-white">
+                <%= ironwood_value(@blockchain_info["valuePools"]) %> <%= @currency %>
+              </dd>
+            </div>
+
             <div class="px-4 py-5 bg-white shadow rounded-lg overflow-hidden sm:p-6 dark:bg-gray-800">
               <dt class="text-sm font-medium text-gray-500 truncate">Zebra version</dt>
               <dd class="mt-1 text-3xl font-semibold text-gray-900 dark:text-white"><%= @blockchain_info["build"] || "—" %></dd>

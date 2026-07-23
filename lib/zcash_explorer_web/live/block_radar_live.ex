@@ -19,12 +19,22 @@ defmodule ZcashExplorerWeb.BlockRadarLive do
      |> assign(:version, 0)}
   end
 
-  def handle_info(:tick, socket) do
-    {:noreply,
-     socket
-     |> assign(:current_time, DateTime.utc_now())
-     |> update(:version, &(&1 + 1))}
-  end
+def handle_info(:tick, socket) do
+  socket =
+    if rem(socket.assigns.version + 1, 15) == 0 do
+      blocks = get_recent_blocks()
+      socket
+      |> assign(:blocks, blocks)
+      |> assign(:rolling_avg_size, calculate_rolling_avg_size(blocks))
+    else
+      socket
+    end
+
+  {:noreply,
+   socket
+   |> assign(:current_time, DateTime.utc_now())
+   |> update(:version, &(&1 + 1))}
+end
 
   defp get_recent_blocks do
     case Cachex.get(:app_cache, "block_cache") do
@@ -86,9 +96,6 @@ defmodule ZcashExplorerWeb.BlockRadarLive do
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Block Radar • Zcash Explorer</title>
         <link rel="stylesheet" href="/assets/app.css">
-        <script>
-          setTimeout(() => { window.location.reload(); }, 15000);
-        </script>
       </head>
       <body class="bg-zinc-950 text-white font-mono">
         <header class="bg-zinc-900 border-b border-zinc-800 sticky top-0 z-50">

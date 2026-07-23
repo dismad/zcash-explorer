@@ -1,11 +1,11 @@
-defmodule ZcashExplorerWeb.OrchardPoolLive do
+defmodule ZcashExplorerWeb.IronwoodPoolLive do
   use Phoenix.LiveView, layout: false
 
   @impl true
   def render(assigns) do
     ~H"""
     <p class="text-2xl font-semibold text-gray-900 dark:text-slate-100">
-      <%= orchard_value(@blockchain_info["valuePools"]) %> <%= @currency %>
+      <%= ironwood_value(@blockchain_info["valuePools"]) %> <%= @currency %>
     </p>
     """
   end
@@ -38,8 +38,8 @@ defmodule ZcashExplorerWeb.OrchardPoolLive do
     {:noreply, assign(socket, blockchain_info: info, currency: currency)}
   end
 
-  defp orchard_value(value_pools) do
-    value_pools |> get_value_pools() |> Map.get("orchard", 0)
+  defp ironwood_value(value_pools) do
+    value_pools |> get_value_pools() |> Map.get("ironwood", 0)
   end
 
   defp get_value_pools(nil), do: %{}

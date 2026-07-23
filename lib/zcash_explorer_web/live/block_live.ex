@@ -11,7 +11,6 @@ defmodule ZcashExplorerWeb.BlockLive do
       {:ok, block_map} ->
         block = Zcashex.Block.from_map(block_map)
 
-        # 1. Fetch full transactions in this block
         block_txs =
           if block && block.tx do
             block.tx
@@ -25,10 +24,8 @@ defmodule ZcashExplorerWeb.BlockLive do
             %{}
           end
 
-        # 2. Collect all previous txids referenced by vins
         prev_txids = collect_prev_txids(block_txs)
 
-        # 3. Fetch missing previous transactions
         prev_txs =
           prev_txids
           |> Enum.reduce(%{}, fn txid, acc ->
@@ -76,25 +73,23 @@ defmodule ZcashExplorerWeb.BlockLive do
       <body class="bg-gray-50 dark:bg-gray-900">
         <%= if @standalone do %>
           <header class="bg-gradient-to-r from-blue-950 via-blue-900 to-blue-800 text-white sticky top-0 z-50 shadow-md">
-          <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="h-14 flex items-center justify-between">
-              <!-- Logo + Title -->
-              <div class="flex items-center gap-x-3 flex-shrink-0">
-                <a href="/" class="flex items-center">
-                  <img src="/images/zcash-icon-white.svg" class="h-8 w-8" alt="Zcash">
-                </a>
-                <a href="/" class="text-xl font-semibold tracking-tight">Zcash Block Explorer</a>
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+              <div class="h-14 flex items-center justify-between">
+                <div class="flex items-center gap-x-3 flex-shrink-0">
+                  <a href="/" class="flex items-center">
+                    <img src="/images/zcash-icon-white.svg" class="h-8 w-8" alt="Zcash">
+                  </a>
+                  <a href="/" class="text-xl font-semibold tracking-tight">Zcash Block Explorer</a>
+                </div>
               </div>
             </div>
-          </div>
-        </header>
+          </header>
         <% end %>
 
         <div class="mx-auto px-4 py-8">
           <h1 class="text-2xl font-semibold mb-6">Details for the Zcash block #<%= @block && @block.height %></h1>
 
           <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <!-- Left column - Main info -->
             <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
               <dl class="grid grid-cols-2 gap-x-8 gap-y-6 text-sm">
                 <div>
@@ -136,7 +131,6 @@ defmodule ZcashExplorerWeb.BlockLive do
               </dl>
             </div>
 
-            <!-- Right column - Technical Details -->
             <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
               <h3 class="font-semibold mb-4">Technical Details</h3>
               <dl class="space-y-4 text-sm">
@@ -152,7 +146,6 @@ defmodule ZcashExplorerWeb.BlockLive do
             </div>
           </div>
 
-          <!-- Transactions table -->
           <h2 class="text-lg font-semibold mt-10 mb-4">Transactions included in this block</h2>
           <div class="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden">
             <table class="w-full text-sm">
@@ -179,7 +172,12 @@ defmodule ZcashExplorerWeb.BlockLive do
                     <td class="px-6 py-4 text-right font-medium"><%= format_zec(tx_output_total(tx)) %></td>
                     <td class="px-6 py-4 text-right font-medium"><%= format_zec(tx_fee(tx, @full_cache)) %></td>
                     <td class="px-6 py-4">
-                      <%= tx_type(tx) %>
+                      <div class="flex items-center gap-1.5 flex-wrap">
+                        <%= tx_type(tx) %>
+                        <%= for badge <- pool_badges(tx) do %>
+                          <%= badge %>
+                        <% end %>
+                      </div>
                     </td>
                   </tr>
                 <% end %>
@@ -192,8 +190,16 @@ defmodule ZcashExplorerWeb.BlockLive do
     """
   end
 
-  # All your original helpers stay exactly the same
-  defp tx_link(tx), do: "/transactions/#{tx.txid}"
+  defp collect_prev_txids(block_txs) do
+    block_txs
+    |> Map.values()
+    |> Enum.flat_map(fn full ->
+      (full["vin"] || [])
+      |> Enum.filter(& &1["txid"])
+      |> Enum.map(& &1["txid"])
+    end)
+    |> Enum.uniq()
+  end
 
   defp miner_address(nil), do: "Unknown"
 
@@ -207,12 +213,10 @@ defmodule ZcashExplorerWeb.BlockLive do
   end
 
   defp input_count(nil), do: 0
-
   defp input_count(block),
     do: Enum.reduce(block.tx || [], 0, fn tx, acc -> acc + length(tx.vin || []) end)
 
   defp output_count(nil), do: 0
-
   defp output_count(block),
     do: Enum.reduce(block.tx || [], 0, fn tx, acc -> acc + length(tx.vout || []) end)
 
@@ -235,6 +239,16 @@ defmodule ZcashExplorerWeb.BlockLive do
     end)
   end
 
+  defp tx_link(tx), do: "/transactions/#{tx.txid}"
+
+  defp total_fees(nil, _full_cache), do: 0.0
+
+  defp total_fees(block, full_cache) do
+    Enum.reduce(block.tx || [], 0.0, fn tx, acc ->
+      acc + tx_fee(tx, full_cache)
+    end)
+  end
+
   defp tx_fee(nil, _full_cache), do: 0.0
 
   defp tx_fee(tx, full_cache) do
@@ -249,28 +263,11 @@ defmodule ZcashExplorerWeb.BlockLive do
       vpub_new = calculate_vpub_new(full)
       sapling = full["valueBalanceZat"] || 0
       orchard = get_in(full, ["orchard", "valueBalanceZat"]) || 0
-      fee_zats = vin_sum - vout_sum - vpub_old + vpub_new + sapling + orchard
+      ironwood = get_in(full, ["ironwood", "valueBalanceZat"]) || 0
+
+      fee_zats = vin_sum - vout_sum - vpub_old + vpub_new + sapling + orchard + ironwood
       fee_zats / 100_000_000.0
     end
-  end
-
-  defp total_fees(nil, _full_cache), do: 0.0
-
-  defp total_fees(block, full_cache) do
-    Enum.reduce(block.tx || [], 0.0, fn tx, acc ->
-      acc + tx_fee(tx, full_cache)
-    end)
-  end
-
-  defp collect_prev_txids(block_txs) do
-    block_txs
-    |> Map.values()
-    |> Enum.flat_map(fn full ->
-      (full["vin"] || [])
-      |> Enum.filter(& &1["txid"])
-      |> Enum.map(& &1["txid"])
-    end)
-    |> Enum.uniq()
   end
 
   defp calculate_vin_sum(full_tx, full_cache) do

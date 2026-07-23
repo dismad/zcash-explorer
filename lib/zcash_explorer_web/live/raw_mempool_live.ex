@@ -51,18 +51,17 @@ defmodule ZcashExplorerWeb.RawMempoolLive do
       <body class="bg-gray-50 dark:bg-gray-900">
         <%= if @standalone do %>
           <header class="bg-gradient-to-r from-blue-950 via-blue-900 to-blue-800 text-white sticky top-0 z-50 shadow-md">
-          <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="h-14 flex items-center justify-between">
-              <!-- Logo + Title -->
-              <div class="flex items-center gap-x-3 flex-shrink-0">
-                <a href="/" class="flex items-center">
-                  <img src="/images/zcash-icon-white.svg" class="h-8 w-8" alt="Zcash">
-                </a>
-                <a href="/" class="text-xl font-semibold tracking-tight">Zcash Block Explorer</a>
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+              <div class="h-14 flex items-center justify-between">
+                <div class="flex items-center gap-x-3 flex-shrink-0">
+                  <a href="/" class="flex items-center">
+                    <img src="/images/zcash-icon-white.svg" class="h-8 w-8" alt="Zcash">
+                  </a>
+                  <a href="/" class="text-xl font-semibold tracking-tight">Zcash Block Explorer</a>
+                </div>
               </div>
             </div>
-          </div>
-        </header>
+          </header>
         <% end %>
 
         <div class="w-full">
@@ -96,12 +95,17 @@ defmodule ZcashExplorerWeb.RawMempoolLive do
                     <td class="px-4 py-4 whitespace-nowrap text-sm font-medium">
                       <%= tx["info"]["size"] %>
                     </td>
-                    <td class="px-4 py-4 whitespace-nowrap">
-                      <%= if match?({:safe, _}, tx["type"]) do %>
-                        <%= raw(elem(tx["type"], 1)) %>
-                      <% else %>
-                        <%= tx_type(tx) %>
-                      <% end %>
+                    <td class="px-4 py-4">
+                      <div class="flex items-center gap-1.5 flex-wrap">
+                        <%= if match?({:safe, _}, tx["type"]) do %>
+                          <%= raw(elem(tx["type"], 1)) %>
+                        <% else %>
+                          <%= tx_type(tx) %>
+                        <% end %>
+                        <%= for pool <- (tx["pools"] || []) do %>
+                          <%= pool_badge(pool) %>
+                        <% end %>
+                      </div>
                     </td>
                   </tr>
                 <% end %>
@@ -114,15 +118,12 @@ defmodule ZcashExplorerWeb.RawMempoolLive do
     """
   end
 
-  # ── Helpers ─────────────────────────────────────────────────────────────────────
-
   defp mined_time_rel(unix_timestamp) when is_integer(unix_timestamp) do
     Timex.from_unix(unix_timestamp) |> Timex.format!("{relative}", :relative)
   end
 
   defp mined_time_rel(_), do: "—"
 
-  # This is the correct formatter for mempool fees (already in ZEC)
   defp format_mempool_fee(amount) when is_number(amount) do
     amount
     |> Decimal.from_float()

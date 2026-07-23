@@ -49,18 +49,17 @@ defmodule ZcashExplorerWeb.TransactionLive do
       <body class="bg-gray-50 dark:bg-gray-900">
         <%= if @standalone do %>
           <header class="bg-gradient-to-r from-blue-950 via-blue-900 to-blue-800 text-white sticky top-0 z-50 shadow-md">
-          <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="h-14 flex items-center justify-between">
-              <!-- Logo + Title -->
-              <div class="flex items-center gap-x-3 flex-shrink-0">
-                <a href="/" class="flex items-center">
-                  <img src="/images/zcash-icon-white.svg" class="h-8 w-8" alt="Zcash">
-                </a>
-                <a href="/" class="text-xl font-semibold tracking-tight">Zcash Block Explorer</a>
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+              <div class="h-14 flex items-center justify-between">
+                <div class="flex items-center gap-x-3 flex-shrink-0">
+                  <a href="/" class="flex items-center">
+                    <img src="/images/zcash-icon-white.svg" class="h-8 w-8" alt="Zcash">
+                  </a>
+                  <a href="/" class="text-xl font-semibold tracking-tight">Zcash Block Explorer</a>
+                </div>
               </div>
             </div>
-          </div>
-        </header>
+          </header>
         <% end %>
 
         <div class="mx-auto px-4 py-8">
@@ -70,30 +69,67 @@ defmodule ZcashExplorerWeb.TransactionLive do
             <!-- Stats -->
             <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
               <dl class="space-y-4">
-                <div class="flex justify-between"><dt class="text-gray-500">Confirmations</dt><dd class="font-semibold"><%= @tx && @tx.confirmations || 0 %></dd></div>
-                <div class="flex justify-between"><dt class="text-gray-500">Block Height</dt><dd><%= @tx && @tx.height %></dd></div>
-                <div class="flex justify-between"><dt class="text-gray-500">Size</dt><dd><%= @tx && @tx.size %> bytes</dd></div>
-                <div class="flex justify-between"><dt class="text-gray-500">Fee</dt><dd class="font-medium"><%= format_zec(tx_fee(@tx, @full_cache)) %> ZEC</dd></div>
+                <div class="flex justify-between">
+                  <dt class="text-gray-500">Confirmations</dt>
+                  <dd class="font-semibold"><%= @tx && @tx.confirmations || 0 %></dd>
+                </div>
+                <div class="flex justify-between">
+                  <dt class="text-gray-500">Block Height</dt>
+                  <dd><%= @tx && @tx.height %></dd>
+                </div>
+                <div class="flex justify-between">
+                  <dt class="text-gray-500">Size</dt>
+                  <dd><%= @tx && @tx.size %> bytes</dd>
+                </div>
+                <div class="flex justify-between">
+                  <dt class="text-gray-500">Fee</dt>
+                  <dd class="font-medium"><%= format_zec(tx_fee(@tx, @full_cache)) %> ZEC</dd>
+                </div>
               </dl>
             </div>
 
             <!-- More stats -->
             <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
               <dl class="space-y-4">
-                <div class="flex justify-between"><dt class="text-gray-500">Public Inputs / Outputs</dt><dd><%= length(@tx && @tx.vin || []) %> / <%= length(@tx && @tx.vout || []) %></dd></div>
-                <div class="flex justify-between"><dt class="text-gray-500">Shielded Inputs / Outputs</dt><dd><%= length(@tx && @tx.vShieldedSpend || []) %> / <%= length(@tx && @tx.vShieldedOutput || []) %></dd></div>
-                <div class="flex justify-between"><dt class="text-gray-500">Orchard Actions</dt><dd><%= length(@tx && @tx.orchard && @tx.orchard.actions || []) %></dd></div>
+                <div class="flex justify-between">
+                  <dt class="text-gray-500">Public Inputs / Outputs</dt>
+                  <dd><%= length(@tx && @tx.vin || []) %> / <%= length(@tx && @tx.vout || []) %></dd>
+                </div>
+                <div class="flex justify-between">
+                  <dt class="text-gray-500">Shielded Inputs / Outputs</dt>
+                  <dd>
+                    <%= length(@tx && @tx.vShieldedSpend || []) %> /
+                    <%= length(@tx && @tx.vShieldedOutput || []) %>
+                  </dd>
+                </div>
+                <div class="flex justify-between">
+                  <dt class="text-gray-500">Orchard Actions</dt>
+                  <dd><%= length(@tx && @tx.orchard && @tx.orchard.actions || []) %></dd>
+                </div>
+                <div class="flex justify-between">
+                  <dt class="text-gray-500">Ironwood Actions</dt>
+                  <dd><%= length(@tx && @tx.ironwood && @tx.ironwood.actions || []) %></dd>
+                </div>
               </dl>
             </div>
 
-            <!-- TX Type -->
-            <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-6 flex items-center gap-3">
-              <span class="text-gray-500">Type</span>
-              <%= tx_type(@tx) %>
+            <!-- TX Type + Pools -->
+            <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
+              <div class="flex flex-col gap-3">
+                <div class="flex items-center gap-3">
+                  <span class="text-gray-500 text-sm">Type</span>
+                  <%= tx_type(@tx) %>
+                </div>
+                <div class="flex flex-wrap items-center gap-2">
+                  <span class="text-gray-500 text-sm">Pools</span>
+                  <%= for badge <- pool_badges(@tx) do %>
+                    <%= badge %>
+                  <% end %>
+                </div>
+              </div>
             </div>
           </div>
 
-          <!-- Public Transfers -->
           <%= public_transfers_section(assigns) %>
         </div>
       </body>
@@ -107,7 +143,6 @@ defmodule ZcashExplorerWeb.TransactionLive do
         content_tag(:h2, "Public Transfers", class: "text-lg font-semibold mb-4"),
         content_tag(:div, class: "flex items-center gap-8") do
           [
-            # INPUTS - now shows correct address + real previous output amount
             content_tag(:div, class: "flex-1") do
               [
                 content_tag(:div, "Inputs (#{length((assigns.tx && assigns.tx.vin) || [])})",
@@ -135,8 +170,6 @@ defmodule ZcashExplorerWeb.TransactionLive do
               ]
             end,
             content_tag(:div, "→", class: "text-4xl text-gray-300"),
-
-            # OUTPUTS
             content_tag(:div, class: "flex-1") do
               [
                 content_tag(:div, "Outputs (#{length((assigns.tx && assigns.tx.vout) || [])})",
@@ -176,30 +209,7 @@ defmodule ZcashExplorerWeb.TransactionLive do
     end
   end
 
-  # ── NEW HELPER: resolves real input address from previous output ──
-  defp get_input_address(vin, full_cache) do
-    cond do
-      vin.address != nil ->
-        vin.address
-
-      vin.txid && vin.vout != nil ->
-        prev_tx = Map.get(full_cache, vin.txid)
-
-        if prev_tx && prev_tx.vout && Enum.at(prev_tx.vout, vin.vout) do
-          out = Enum.at(prev_tx.vout, vin.vout)
-          List.first(out.scriptPubKey.addresses || [])
-        else
-          nil
-        end
-
-      true ->
-        nil
-    end
-  end
-
-  # ==================================================================
-  # Your original helpers (100% unchanged)
-  # ==================================================================
+  # ── Fee calculation (includes Ironwood) ──────────────────────────────────
   defp tx_fee(nil, _), do: 0.0
 
   defp tx_fee(tx, full_cache) do
@@ -212,12 +222,15 @@ defmodule ZcashExplorerWeb.TransactionLive do
       vpub_new = calculate_vpub_new(tx)
       sapling = tx.valueBalanceZat || 0
       orchard = (tx.orchard && tx.orchard.valueBalanceZat) || 0
-      fee_zats = vin_sum - vout_sum - vpub_old + vpub_new + sapling + orchard
+      ironwood = (tx.ironwood && tx.ironwood.valueBalanceZat) || 0
+
+      fee_zats = vin_sum - vout_sum - vpub_old + vpub_new + sapling + orchard + ironwood
       fee_zats / 100_000_000.0
     end
   end
 
-  defp is_coinbase?(tx), do: tx.vin && length(tx.vin) > 0 && hd(tx.vin).coinbase != nil
+  defp is_coinbase?(tx),
+    do: tx.vin && length(tx.vin) > 0 && hd(tx.vin).coinbase != nil
 
   defp calculate_vin_sum(tx, full_cache) do
     Enum.reduce(tx.vin || [], 0, fn vin, acc ->
@@ -276,8 +289,40 @@ defmodule ZcashExplorerWeb.TransactionLive do
       round((Map.get(item, :value) || 0) * 100_000_000) || 0
   end
 
+  # ── Address helpers ──────────────────────────────────────────────────────
+  defp first_address(vout) do
+    case vout && vout.scriptPubKey && vout.scriptPubKey.addresses do
+      addresses when is_list(addresses) and length(addresses) > 0 -> hd(addresses)
+      _ -> nil
+    end
+  end
+
+  defp get_input_address(vin, full_cache) do
+    cond do
+      vin.address != nil ->
+        vin.address
+
+      vin.txid && vin.vout != nil ->
+        prev_tx = Map.get(full_cache, vin.txid)
+
+        if prev_tx && prev_tx.vout && Enum.at(prev_tx.vout, vin.vout) do
+          out = Enum.at(prev_tx.vout, vin.vout)
+          List.first(out.scriptPubKey.addresses || [])
+        else
+          nil
+        end
+
+      true ->
+        nil
+    end
+  end
+
   defp fetch_prev_txs(tx) do
-    txids = Enum.map(tx.vin || [], & &1.txid) |> Enum.reject(&is_nil/1) |> Enum.uniq()
+    txids =
+      (tx.vin || [])
+      |> Enum.map(& &1.txid)
+      |> Enum.reject(&is_nil/1)
+      |> Enum.uniq()
 
     txids
     |> Task.async_stream(&Zcashex.getrawtransaction(&1, 1), max_concurrency: 8, timeout: 10_000)
@@ -291,13 +336,7 @@ defmodule ZcashExplorerWeb.TransactionLive do
     end)
   end
 
-  defp first_address(vout) do
-    case vout && vout.scriptPubKey && vout.scriptPubKey.addresses do
-      addresses when is_list(addresses) and length(addresses) > 0 -> hd(addresses)
-      _ -> nil
-    end
-  end
-
+  # ── Formatting ───────────────────────────────────────────────────────────
   defp format_zec(nil), do: "0.00000000"
 
   defp format_zec(amount) when is_integer(amount) do
@@ -308,7 +347,10 @@ defmodule ZcashExplorerWeb.TransactionLive do
   end
 
   defp format_zec(amount) when is_float(amount) or is_number(amount) do
-    amount |> Decimal.from_float() |> Decimal.round(8) |> Decimal.to_string(:normal)
+    amount
+    |> Decimal.from_float()
+    |> Decimal.round(8)
+    |> Decimal.to_string(:normal)
   end
 
   defp format_zec(_), do: "0.00000000"
