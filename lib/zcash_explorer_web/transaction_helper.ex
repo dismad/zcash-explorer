@@ -4,10 +4,6 @@ defmodule ZcashExplorerWeb.TransactionHelper do
   @pure_shielded_pools ["ironwood", "orchard", "sapling", "sprout"]
   @priority_types ["coinbase", "shielding", "deshielding", "transparent"]
 
-  @doc """
-  Returns a string type name for warmers and lists.
-  Never returns HTML.
-  """
   def classify(tx) when is_map(tx) do
     pools = Map.get(tx, "pools") || Map.get(tx, :pools) || pool_list(tx)
     has_shielded_pool? = Enum.any?(pools, &(&1 in @pure_shielded_pools))
@@ -76,20 +72,67 @@ defmodule ZcashExplorerWeb.TransactionHelper do
       |> then(fn l -> if has_ironwood, do: ["ironwood" | l], else: l end)
       |> Enum.reverse()
 
-    if is_coinbase?(tx) do
-      List.delete(list, "transparent")
-    else
-      list
-    end
+    if is_coinbase?(tx), do: List.delete(list, "transparent"), else: list
   end
 
   def pool_list(_), do: []
 
   def pool_badges(tx) when is_map(tx) do
-    Enum.map(pool_list(tx), &pool_badge/1)
+    chips = Enum.map(pool_list(tx), &pool_badge/1)
+
+    if turnstile?(tx) do
+      chips ++ [pool_badge("turnstile")]
+    else
+      chips
+    end
   end
 
   def pool_badges(_), do: []
+
+  @doc "True when 2+ shielded pools are involved (Sapling/Orchard/Ironwood/Sprout)."
+  def turnstile?(tx) when is_map(tx) do
+    case Map.get(tx, "turnstile") do
+      true -> true
+      false -> false
+      _ ->
+        pools = Map.get(tx, "pools") || Map.get(tx, :pools) || pool_list(tx)
+        shielded = Enum.count(pools, &(&1 in @pure_shielded_pools))
+        shielded >= 2
+    end
+  end
+
+  def turnstile?(_), do: false
+
+  @doc "Largest absolute pool value-balance in zatoshis (turnstile size)."
+  def turnstile_amount_zats(tx) when is_map(tx) do
+    case Map.get(tx, "turnstile_zat") do
+      n when is_integer(n) and n > 0 ->
+        n
+
+      n when is_float(n) and n > 0 ->
+        round(n)
+
+      _ ->
+        if turnstile?(tx), do: max_pool_abs_zat(tx), else: 0
+    end
+  end
+
+  def turnstile_amount_zats(_), do: 0
+
+  def turnstile_amount_zec(tx) do
+    turnstile_amount_zats(tx) / 100_000_000.0
+  end
+
+  def pool_flow_zec(tx) when is_map(tx) do
+    %{
+      sapling: sapling_zat(tx) / 100_000_000.0,
+      orchard: get_pool_zat(pool_field(tx, :orchard)) / 100_000_000.0,
+      ironwood: get_pool_zat(pool_field(tx, :ironwood)) / 100_000_000.0,
+      turnstile: turnstile_amount_zec(tx)
+    }
+  end
+
+  def pool_flow_zec(_), do: %{sapling: 0.0, orchard: 0.0, ironwood: 0.0, turnstile: 0.0}
 
   def pool_badge("transparent") do
     raw(
@@ -104,10 +147,10 @@ defmodule ZcashExplorerWeb.TransactionHelper do
   end
 
   def pool_badge("sapling") do
-  raw(
-    ~S{<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium bg-yellow-100 text-yellow-900 dark:bg-yellow-900/40 dark:text-yellow-200">Sapling</span>}
-  )
-end
+    raw(
+      ~S{<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium bg-yellow-400 text-gray-900 dark:bg-yellow-500 dark:text-gray-900">Sapling</span>}
+    )
+  end
 
   def pool_badge("orchard") do
     raw(
@@ -121,65 +164,84 @@ end
     )
   end
 
+  def pool_badge("turnstile") do
+    raw(
+      ~S{<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium bg-violet-100 text-violet-800 dark:bg-violet-900/40 dark:text-violet-200">Turnstile</span>}
+    )
+  end
+
   def pool_badge(_), do: raw("")
 
- defp detect_type(tx) do
-  vin = Map.get(tx, "vin") || Map.get(tx, :vin) || []
-  vout = Map.get(tx, "vout") || Map.get(tx, :vout) || []
-  vjoinsplit = Map.get(tx, "vjoinsplit") || Map.get(tx, :vjoinsplit) || []
-  orchard = pool_field(tx, :orchard)
-  ironwood = pool_field(tx, :ironwood)
+  defp detect_type(tx) do
+    vin = Map.get(tx, "vin") || Map.get(tx, :vin) || []
+    vout = Map.get(tx, "vout") || Map.get(tx, :vout) || []
+    vjoinsplit = Map.get(tx, "vjoinsplit") || Map.get(tx, :vjoinsplit) || []
+    orchard = pool_field(tx, :orchard)
+    ironwood = pool_field(tx, :ironwood)
 
-  value_zat = Map.get(tx, "valueBalanceZat") || Map.get(tx, :valueBalanceZat) || 0
-  orchard_zat = get_pool_zat(orchard)
-  ironwood_zat = get_pool_zat(ironwood)
+    value_zat = sapling_zat(tx)
+    orchard_zat = get_pool_zat(orchard)
+    ironwood_zat = get_pool_zat(ironwood)
 
-  pools = Map.get(tx, "pools") || Map.get(tx, :pools) || []
-  stored = Map.get(tx, "type") || Map.get(tx, :type)
-  stored = if is_binary(stored), do: stored, else: nil
+    pools = Map.get(tx, "pools") || Map.get(tx, :pools) || []
+    stored = Map.get(tx, "type") || Map.get(tx, :type)
+    stored = if is_binary(stored), do: stored, else: nil
 
-  coinbase? = is_coinbase?(tx) or stored == "coinbase"
-  has_t_in = not coinbase? and length(vin) > 0
-  has_t_out = length(vout) > 0
+    coinbase? = is_coinbase?(tx) or stored == "coinbase"
+    has_t_in = not coinbase? and length(vin) > 0
+    has_t_out = length(vout) > 0
 
-  has_z =
-    has_pool?(ironwood) or has_pool?(orchard) or has_sapling?(tx) or
-      (is_list(vjoinsplit) and vjoinsplit != []) or
-      Enum.any?(pools, &(&1 in @pure_shielded_pools))
+    has_z =
+      has_pool?(ironwood) or has_pool?(orchard) or has_sapling?(tx) or
+        (is_list(vjoinsplit) and vjoinsplit != []) or
+        Enum.any?(pools, &(&1 in @pure_shielded_pools))
 
-  into_shielded? = value_zat < 0 or orchard_zat < 0 or ironwood_zat < 0
-  out_of_shielded? = value_zat > 0 or orchard_zat > 0 or ironwood_zat > 0
+    into_shielded? = value_zat < 0 or orchard_zat < 0 or ironwood_zat < 0
+    out_of_shielded? = value_zat > 0 or orchard_zat > 0 or ironwood_zat > 0
 
-  cond do
-    coinbase? ->
-      "coinbase"
+    cond do
+      coinbase? ->
+        "coinbase"
 
-    stored in ["shielding", "deshielding", "transparent", "shielded"] ->
-      stored
+      stored in ["shielding", "deshielding", "transparent", "shielded"] ->
+        stored
 
-    # Transparent → shielded (any pool, including Ironwood)
-    has_t_in and has_z and (not has_t_out or into_shielded?) ->
-      "shielding"
+      has_t_in and has_z and (not has_t_out or into_shielded?) ->
+        "shielding"
 
-    # Shielded → transparent
-    has_z and has_t_out and (not has_t_in or out_of_shielded?) ->
-      "deshielding"
+      has_z and has_t_out and (not has_t_in or out_of_shielded?) ->
+        "deshielding"
 
-    # Pure shielded or cross-pool (Ironwood ↔ Sapling, etc.)
-    has_z and not has_t_in and not has_t_out ->
-      "shielded"
+      has_z and not has_t_in and not has_t_out ->
+        "shielded"
 
-    has_t_in and has_t_out and not has_z ->
-      "transparent"
+      has_t_in and has_t_out and not has_z ->
+        "transparent"
 
-    has_t_in and has_t_out and has_z ->
-      # both sides present without clear balance sign
-      if into_shielded?, do: "shielding", else: if(out_of_shielded?, do: "deshielding", else: "mixed")
+      has_t_in and has_t_out and has_z ->
+        cond do
+          into_shielded? -> "shielding"
+          out_of_shielded? -> "deshielding"
+          true -> "mixed"
+        end
 
-    true ->
-      "mixed"
+      true ->
+        "mixed"
+    end
   end
-end
+
+  defp max_pool_abs_zat(tx) do
+    [
+      abs(sapling_zat(tx)),
+      abs(get_pool_zat(pool_field(tx, :orchard))),
+      abs(get_pool_zat(pool_field(tx, :ironwood)))
+    ]
+    |> Enum.max()
+  end
+
+  defp sapling_zat(tx) do
+    Map.get(tx, "valueBalanceZat") || Map.get(tx, :valueBalanceZat) || 0
+  end
 
   defp pool_field(tx, key) when is_atom(key) do
     Map.get(tx, key) || Map.get(tx, Atom.to_string(key))
@@ -233,12 +295,12 @@ end
 
       "shielding" ->
         raw(
-          ~S{<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gradient-to-r from-amber-200 to-emerald-400 text-gray-900 capitalize">Shielding</span>}
+          ~S{<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gradient-to-r from-amber-200 to-emerald-400 text-gray-900 capitalize">Shielding (T-Z)</span>}
         )
 
       "deshielding" ->
         raw(
-          ~S{<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gradient-to-r from-emerald-400 to-amber-200 text-gray-900 capitalize">Deshielding</span>}
+          ~S{<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gradient-to-r from-emerald-400 to-amber-200 text-gray-900 capitalize">Deshielding (Z-T)</span>}
         )
 
       "shielded" ->
