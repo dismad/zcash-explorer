@@ -11,38 +11,50 @@ defmodule ZcashExplorer.Mempool.MempoolWarmer do
       {:ok, raw_mempool} ->
         mempool_info =
           Enum.map(raw_mempool, fn {txid, info} ->
-            {type, pools, coinbase?} =
-              case Zcashex.getrawtransaction(txid, 1) do
-                {:ok, full_tx} ->
-                  tx = Zcashex.Transaction.from_map(full_tx)
-                  pools = pool_list(tx)
-                  coinbase? = is_coinbase_tx?(tx)
+            case Zcashex.getrawtransaction(txid, 1) do
+              {:ok, full_tx} ->
+                tx = Zcashex.Transaction.from_map(full_tx)
+                pools = pool_list(tx)
+                coinbase? = is_coinbase_tx?(tx)
 
-                  type =
-                    if coinbase? do
-                      "coinbase"
-                    else
-                      classify(tx)
-                    end
+                type =
+                  if coinbase? do
+                    "coinbase"
+                  else
+                    classify(tx)
+                  end
 
-                  {type, pools, coinbase?}
+                turnstile? = turnstile?(tx)
+                turnstile_zat = turnstile_amount_zats(tx)
 
-                {:error, reason} ->
-                  Logger.error(
-                    "MempoolWarmer: Failed to fetch full tx #{txid}: #{inspect(reason)}"
-                  )
+                %{
+                  "txid" => txid,
+                  "info" => info,
+                  # STRING type only — never tx_type/1 HTML
+                  "type" => type,
+                  "pools" => pools,
+                  "is_coinbase" => coinbase?,
+                  "turnstile" => turnstile?,
+                  "turnstile_zat" => turnstile_zat,
+                  "turnstile_zec" => turnstile_zat / 100_000_000.0
+                }
 
-                  {"unknown", [], false}
-              end
+              {:error, reason} ->
+                Logger.error(
+                  "MempoolWarmer: Failed to fetch full tx #{txid}: #{inspect(reason)}"
+                )
 
-            %{
-              "txid" => txid,
-              "info" => info,
-              # STRING type only — never tx_type/1 HTML
-              "type" => type,
-              "pools" => pools,
-              "is_coinbase" => coinbase?
-            }
+                %{
+                  "txid" => txid,
+                  "info" => info,
+                  "type" => "unknown",
+                  "pools" => [],
+                  "is_coinbase" => false,
+                  "turnstile" => false,
+                  "turnstile_zat" => 0,
+                  "turnstile_zec" => 0.0
+                }
+            end
           end)
 
         Logger.info(
