@@ -15,6 +15,7 @@ defmodule ZcashExplorerWeb.TransactionLive do
         {:ok,
          assign(socket,
            tx: tx,
+           tx_raw: tx_map,
            txid: txid,
            zcash_network: network,
            standalone: standalone,
@@ -25,6 +26,7 @@ defmodule ZcashExplorerWeb.TransactionLive do
         {:ok,
          assign(socket,
            tx: nil,
+           tx_raw: nil,
            txid: txid,
            zcash_network: network,
            standalone: standalone,
@@ -106,15 +108,15 @@ defmodule ZcashExplorerWeb.TransactionLive do
                 </div>
                 <div class="flex justify-between">
                   <dt class="text-gray-500">Orchard Actions</dt>
-                  <dd><%= length(@tx && @tx.orchard && @tx.orchard.actions || []) %></dd>
+                  <dd><%= orchard_action_count(@tx) %></dd>
                 </div>
                 <div class="flex justify-between">
                   <dt class="text-gray-500">Ironwood Actions</dt>
-                  <dd><%= length(@tx && @tx.ironwood && @tx.ironwood.actions || []) %></dd>
+                  <dd><%= ironwood_action_count(@tx) %></dd>
                 </div>
               </dl>
             </div>
-            <!-- TX Type + Pools -->
+            <!-- TX Type + Pools + Turnstile -->
             <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
               <div class="flex flex-col gap-3">
                 <div class="flex items-center gap-3">
@@ -127,6 +129,16 @@ defmodule ZcashExplorerWeb.TransactionLive do
                     <%= badge %>
                   <% end %>
                 </div>
+                <%= if @tx && turnstile?(@tx) do %>
+                  <div class="pt-2 border-t border-gray-100 dark:border-gray-700">
+                    <div class="flex justify-between items-center gap-2">
+                      <span class="text-gray-500 text-sm">Turnstile</span>
+                      <span class="font-mono font-medium text-violet-700 dark:text-violet-300">
+                        <%= format_zec(turnstile_amount_zec(@tx)) %> ZEC
+                      </span>
+                    </div>
+                  </div>
+                <% end %>
               </div>
             </div>
           </div>
@@ -142,7 +154,6 @@ defmodule ZcashExplorerWeb.TransactionLive do
     <div class="mt-8 bg-white dark:bg-gray-800 shadow rounded-lg p-4 sm:p-6">
       <h2 class="text-lg font-semibold mb-4">Public Transfers</h2>
       <div class="flex flex-col lg:flex-row lg:items-start gap-4 lg:gap-8">
-        <!-- Inputs -->
         <div class="flex-1 min-w-0">
           <div class="text-sm text-gray-500 mb-3">
             Inputs (<%= length((@tx && @tx.vin) || []) %>)
@@ -165,15 +176,12 @@ defmodule ZcashExplorerWeb.TransactionLive do
             <% end %>
           </div>
         </div>
-        <!-- Arrow (hidden on mobile, shown on desktop) -->
         <div class="hidden lg:flex items-center justify-center text-3xl text-gray-300 pt-8">
           →
         </div>
-        <!-- Mobile arrow -->
         <div class="flex lg:hidden items-center justify-center text-2xl text-gray-300 py-1">
           ↓
         </div>
-        <!-- Outputs -->
         <div class="flex-1 min-w-0">
           <div class="text-sm text-gray-500 mb-3">
             Outputs (<%= length((@tx && @tx.vout) || []) %>)
@@ -204,32 +212,65 @@ defmodule ZcashExplorerWeb.TransactionLive do
     """
   end
 
-  # ── Fee calculation (includes Ironwood) ──────────────────────────────────
+  defp orchard_action_count(nil), do: 0
+
+  defp orchard_action_count(tx) do
+    case Map.get(tx, :orchard) || Map.get(tx, "orchard") do
+      %{actions: actions} when is_list(actions) -> length(actions)
+      %{"actions" => actions} when is_list(actions) -> length(actions)
+      _ -> 0
+    end
+  end
+
+  defp ironwood_action_count(nil), do: 0
+
+  defp ironwood_action_count(tx) do
+    case Map.get(tx, :ironwood) || Map.get(tx, "ironwood") do
+      %{actions: actions} when is_list(actions) -> length(actions)
+      %{"actions" => actions} when is_list(actions) -> length(actions)
+      _ -> 0
+    end
+  end
 
   defp tx_fee(nil, _), do: 0.0
 
   defp tx_fee(tx, full_cache) do
-    if is_coinbase?(tx) do
+    if is_coinbase_tx?(tx) do
       0.0
     else
       vin_sum = calculate_vin_sum(tx, full_cache)
       vout_sum = calculate_vout_sum(tx)
       vpub_old = calculate_vpub_old(tx)
       vpub_new = calculate_vpub_new(tx)
-      sapling = tx.valueBalanceZat || 0
-      orchard = (tx.orchard && tx.orchard.valueBalanceZat) || 0
-      ironwood = (tx.ironwood && tx.ironwood.valueBalanceZat) || 0
+      sapling = Map.get(tx, :valueBalanceZat) || Map.get(tx, "valueBalanceZat") || 0
+
+      orchard =
+        case Map.get(tx, :orchard) || Map.get(tx, "orchard") do
+          %{valueBalanceZat: z} when is_number(z) -> z
+          %{"valueBalanceZat" => z} when is_number(z) -> z
+          _ -> 0
+        end
+
+      ironwood =
+        case Map.get(tx, :ironwood) || Map.get(tx, "ironwood") do
+          %{valueBalanceZat: z} when is_number(z) -> z
+          %{"valueBalanceZat" => z} when is_number(z) -> z
+          _ -> 0
+        end
 
       fee_zats = vin_sum - vout_sum - vpub_old + vpub_new + sapling + orchard + ironwood
       fee_zats / 100_000_000.0
     end
   end
 
-  defp is_coinbase?(tx),
-    do: tx.vin && length(tx.vin) > 0 && hd(tx.vin).coinbase != nil
+  defp is_coinbase_tx?(tx) do
+    vin = Map.get(tx, :vin) || Map.get(tx, "vin") || []
+    match?([%{coinbase: c} | _] when c != nil, vin) or
+      match?([%{"coinbase" => c} | _] when c != nil, vin)
+  end
 
   defp calculate_vin_sum(tx, full_cache) do
-    Enum.reduce(tx.vin || [], 0, fn vin, acc ->
+    Enum.reduce(Map.get(tx, :vin) || Map.get(tx, "vin") || [], 0, fn vin, acc ->
       acc + get_input_value(vin, full_cache)
     end)
   end
@@ -245,11 +286,11 @@ defmodule ZcashExplorerWeb.TransactionLive do
       Map.get(vin, :value) != nil ->
         round(Map.get(vin, :value) * 100_000_000)
 
-      vin.txid && vin.vout != nil ->
-        prev_tx = Map.get(full_cache, vin.txid)
+      Map.get(vin, :txid) && Map.get(vin, :vout) != nil ->
+        prev_tx = Map.get(full_cache, Map.get(vin, :txid))
 
-        if prev_tx && prev_tx.vout && Enum.at(prev_tx.vout, vin.vout) do
-          out = Enum.at(prev_tx.vout, vin.vout)
+        if prev_tx && prev_tx.vout && Enum.at(prev_tx.vout, Map.get(vin, :vout)) do
+          out = Enum.at(prev_tx.vout, Map.get(vin, :vout))
 
           Map.get(out, :valueZat) || Map.get(out, :valueSat) ||
             round((Map.get(out, :value) || 0) * 100_000_000)
@@ -263,20 +304,20 @@ defmodule ZcashExplorerWeb.TransactionLive do
   end
 
   defp calculate_vout_sum(tx) do
-    Enum.reduce(tx.vout || [], 0, fn vout, acc ->
+    Enum.reduce(Map.get(tx, :vout) || Map.get(tx, "vout") || [], 0, fn vout, acc ->
       acc + safe_zats(vout)
     end)
   end
 
   defp calculate_vpub_old(tx) do
-    Enum.reduce(tx.vjoinsplit || [], 0, fn j, acc ->
-      acc + (Map.get(j, :vpub_oldZat) || 0)
+    Enum.reduce(Map.get(tx, :vjoinsplit) || Map.get(tx, "vjoinsplit") || [], 0, fn j, acc ->
+      acc + (Map.get(j, :vpub_oldZat) || Map.get(j, "vpub_oldZat") || 0)
     end)
   end
 
   defp calculate_vpub_new(tx) do
-    Enum.reduce(tx.vjoinsplit || [], 0, fn j, acc ->
-      acc + (Map.get(j, :vpub_newZat) || 0)
+    Enum.reduce(Map.get(tx, :vjoinsplit) || Map.get(tx, "vjoinsplit") || [], 0, fn j, acc ->
+      acc + (Map.get(j, :vpub_newZat) || Map.get(j, "vpub_newZat") || 0)
     end)
   end
 
@@ -285,10 +326,8 @@ defmodule ZcashExplorerWeb.TransactionLive do
       round((Map.get(item, :value) || 0) * 100_000_000) || 0
   end
 
-  # ── Address helpers ──────────────────────────────────────────────────────
-
   defp first_address(vout) do
-    case vout && vout.scriptPubKey && vout.scriptPubKey.addresses do
+    case vout && Map.get(vout, :scriptPubKey) && Map.get(vout.scriptPubKey, :addresses) do
       addresses when is_list(addresses) and length(addresses) > 0 -> hd(addresses)
       _ -> nil
     end
@@ -296,15 +335,16 @@ defmodule ZcashExplorerWeb.TransactionLive do
 
   defp get_input_address(vin, full_cache) do
     cond do
-      vin.address != nil ->
-        vin.address
+      Map.get(vin, :address) != nil ->
+        Map.get(vin, :address)
 
-      vin.txid && vin.vout != nil ->
-        prev_tx = Map.get(full_cache, vin.txid)
+      Map.get(vin, :txid) && Map.get(vin, :vout) != nil ->
+        prev_tx = Map.get(full_cache, Map.get(vin, :txid))
 
-        if prev_tx && prev_tx.vout && Enum.at(prev_tx.vout, vin.vout) do
-          out = Enum.at(prev_tx.vout, vin.vout)
-          List.first(out.scriptPubKey.addresses || [])
+        if prev_tx && prev_tx.vout && Enum.at(prev_tx.vout, Map.get(vin, :vout)) do
+          out = Enum.at(prev_tx.vout, Map.get(vin, :vout))
+          spk = Map.get(out, :scriptPubKey)
+          List.first((spk && Map.get(spk, :addresses)) || [])
         else
           nil
         end
@@ -316,8 +356,8 @@ defmodule ZcashExplorerWeb.TransactionLive do
 
   defp fetch_prev_txs(tx) do
     txids =
-      (tx.vin || [])
-      |> Enum.map(& &1.txid)
+      (Map.get(tx, :vin) || Map.get(tx, "vin") || [])
+      |> Enum.map(&(Map.get(&1, :txid) || Map.get(&1, "txid")))
       |> Enum.reject(&is_nil/1)
       |> Enum.uniq()
 
@@ -332,8 +372,6 @@ defmodule ZcashExplorerWeb.TransactionLive do
         acc
     end)
   end
-
-  # ── Formatting ───────────────────────────────────────────────────────────
 
   defp format_zec(nil), do: "0.00000000"
 
