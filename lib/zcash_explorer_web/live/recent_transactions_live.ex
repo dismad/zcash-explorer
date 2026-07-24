@@ -93,6 +93,7 @@ defmodule ZcashExplorerWeb.RecentTransactionsLive do
                   <th scope="col" class="px-6 py-3 text-right">Public Input (<%= if @chain == "main", do: "ZEC", else: "TAZ" %>)</th>
                   <th scope="col" class="px-6 py-3 text-right">Public Output (<%= if @chain == "main", do: "ZEC", else: "TAZ" %>)</th>
                   <th scope="col" class="px-6 py-3 text-right">Δ Transparent</th>
+                  <th scope="col" class="px-4 py-3 text-right">Turnstile (ZEC)</th>
                   <th scope="col" class="px-4 py-3">TX Type</th>
                 </tr>
               </thead>
@@ -117,11 +118,17 @@ defmodule ZcashExplorerWeb.RecentTransactionsLive do
                         <%= format_delta(tx["tx_delta"], tx["delta_kind"]) %>
                       </span>
                     </td>
+                    <td class="px-4 py-4 whitespace-nowrap text-sm font-mono text-right">
+                      <%= format_turnstile(tx) %>
+                    </td>
                     <td class="px-4 py-4">
                       <div class="flex items-center gap-1.5 flex-wrap">
                         <%= tx_type(tx) %>
                         <%= for pool <- pools_for(tx) do %>
                           <%= pool_badge(pool) %>
+                        <% end %>
+                        <%= if turnstile?(tx) do %>
+                          <%= pool_badge("turnstile") %>
                         <% end %>
                       </div>
                     </td>
@@ -136,7 +143,6 @@ defmodule ZcashExplorerWeb.RecentTransactionsLive do
     """
   end
 
-  # Prefer warmer pools list; fall back to live detection
   defp pools_for(tx) when is_map(tx) do
     case Map.get(tx, "pools") || Map.get(tx, :pools) do
       pools when is_list(pools) and pools != [] -> pools
@@ -145,6 +151,20 @@ defmodule ZcashExplorerWeb.RecentTransactionsLive do
   end
 
   defp pools_for(_), do: []
+
+  defp format_turnstile(tx) do
+    if turnstile?(tx) do
+      zec = Map.get(tx, "turnstile_zec") || turnstile_amount_zec(tx)
+
+      if is_number(zec) and zec > 0 do
+        :erlang.float_to_binary(zec * 1.0, decimals: 8)
+      else
+        "—"
+      end
+    else
+      "—"
+    end
+  end
 
   defp format_amount(nil), do: "0.00000000"
   defp format_amount(n) when is_number(n), do: :erlang.float_to_binary(n * 1.0, decimals: 8)
