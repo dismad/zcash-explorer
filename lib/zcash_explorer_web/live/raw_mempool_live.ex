@@ -75,6 +75,7 @@ defmodule ZcashExplorerWeb.RawMempoolLive do
                   <th scope="col" class="px-4 py-3">Time</th>
                   <th scope="col" class="px-4 py-3">Fee (ZEC)</th>
                   <th scope="col" class="px-4 py-3">Size</th>
+                  <th scope="col" class="px-4 py-3 text-right">Turnstile (ZEC)</th>
                   <th scope="col" class="px-4 py-3">TX Type</th>
                 </tr>
               </thead>
@@ -96,11 +97,17 @@ defmodule ZcashExplorerWeb.RawMempoolLive do
                     <td class="px-4 py-4 whitespace-nowrap text-sm font-medium">
                       <%= get_in(tx, ["info", "size"]) %>
                     </td>
+                    <td class="px-4 py-4 whitespace-nowrap text-sm font-mono text-right">
+                      <%= format_turnstile(tx) %>
+                    </td>
                     <td class="px-4 py-4">
                       <div class="flex items-center gap-1.5 flex-wrap">
                         <%= tx_type(tx) %>
                         <%= for pool <- pools_for(tx) do %>
                           <%= pool_badge(pool) %>
+                        <% end %>
+                        <%= if turnstile?(tx) do %>
+                          <%= pool_badge("turnstile") %>
                         <% end %>
                       </div>
                     </td>
@@ -123,6 +130,20 @@ defmodule ZcashExplorerWeb.RawMempoolLive do
   end
 
   defp pools_for(_), do: []
+
+  defp format_turnstile(tx) do
+    if turnstile?(tx) do
+      zec = Map.get(tx, "turnstile_zec") || turnstile_amount_zec(tx)
+
+      if is_number(zec) and zec > 0 do
+        :erlang.float_to_binary(zec * 1.0, decimals: 8)
+      else
+        "—"
+      end
+    else
+      "—"
+    end
+  end
 
   defp mined_time_rel(unix_timestamp) when is_integer(unix_timestamp) do
     Timex.from_unix(unix_timestamp) |> Timex.format!("{relative}", :relative)
