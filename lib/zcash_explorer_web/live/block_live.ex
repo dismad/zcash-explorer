@@ -187,21 +187,23 @@ defmodule ZcashExplorerWeb.BlockLive do
           </h2>
           <div class="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden">
             <div class="overflow-x-auto">
-              <table class="w-full text-xs sm:text-sm min-w-[640px]">
+              <table class="w-full text-xs sm:text-sm min-w-[720px]">
                 <thead class="bg-gray-50 dark:bg-gray-700">
                   <tr>
                     <th class="px-2 sm:px-4 py-2 sm:py-3 text-left">HASH</th>
                     <th class="px-2 sm:px-4 py-2 sm:py-3 text-right">Public Input</th>
                     <th class="px-2 sm:px-4 py-2 sm:py-3 text-right">Public Output</th>
                     <th class="px-2 sm:px-4 py-2 sm:py-3 text-right">Δ Transparent</th>
+                    <th class="px-2 sm:px-4 py-2 sm:py-3 text-right">Turnstile (ZEC)</th>
                     <th class="px-2 sm:px-4 py-2 sm:py-3 text-left">TX Type</th>
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
                   <%= for tx <- @block && @block.tx || [] do %>
+                    <% full = Map.get(@full_cache, tx.txid) || tx %>
                     <% in_total = tx_in_total(tx, @full_cache) %>
                     <% out_total = tx_output_total(tx) %>
-                    <% {delta, kind} = tx_delta(tx, in_total, out_total) %>
+                    <% {delta, kind} = tx_delta(full, in_total, out_total) %>
                     <tr class="hover:bg-gray-50 dark:hover:bg-gray-700">
                       <td class="px-2 sm:px-4 py-2 sm:py-4 font-mono text-indigo-600 hover:text-indigo-500">
                         <a href={tx_link(tx)} class="sm:hidden"><%= String.slice(tx.txid, 0, 10) %>…</a>
@@ -218,10 +220,13 @@ defmodule ZcashExplorerWeb.BlockLive do
                           <%= format_delta(delta, kind) %>
                         </span>
                       </td>
+                      <td class="px-2 sm:px-4 py-2 sm:py-4 text-right whitespace-nowrap font-mono">
+                        <%= format_turnstile(full) %>
+                      </td>
                       <td class="px-2 sm:px-4 py-2 sm:py-4">
                         <div class="flex items-center gap-1 sm:gap-1.5 flex-wrap">
-                          <%= tx_type(tx) %>
-                          <%= for badge <- pool_badges(tx) do %>
+                          <%= tx_type(full) %>
+                          <%= for badge <- pool_badges(full) do %>
                             <%= badge %>
                           <% end %>
                         </div>
@@ -238,7 +243,19 @@ defmodule ZcashExplorerWeb.BlockLive do
     """
   end
 
-  # ── Helpers ──────────────────────────────────────────────────────────────
+  defp format_turnstile(tx) do
+    if turnstile?(tx) do
+      zec = turnstile_amount_zec(tx)
+
+      if is_number(zec) and zec > 0 do
+        :erlang.float_to_binary(zec * 1.0, decimals: 8)
+      else
+        "—"
+      end
+    else
+      "—"
+    end
+  end
 
   defp miner_name(nil), do: nil
 
@@ -379,10 +396,19 @@ defmodule ZcashExplorerWeb.BlockLive do
     end
   end
 
-  defp is_coinbase_struct?(tx) do
-    vin = tx.vin || []
-    vin != [] and (Map.get(hd(vin), :coinbase) != nil or Map.get(hd(vin), "coinbase") != nil)
+  defp is_coinbase_struct?(tx) when is_map(tx) do
+    vin = Map.get(tx, :vin) || Map.get(tx, "vin") || []
+
+    case vin do
+      [first | _] when is_map(first) ->
+        Map.get(first, :coinbase) != nil or Map.get(first, "coinbase") != nil
+
+      _ ->
+        false
+    end
   end
+
+  defp is_coinbase_struct?(_), do: false
 
   defp format_delta(n, "fee") when is_number(n),
     do: :erlang.float_to_binary(abs(n) * 1.0, decimals: 8)
@@ -428,7 +454,6 @@ defmodule ZcashExplorerWeb.BlockLive do
       sapling = full["valueBalanceZat"] || 0
       orchard = get_in(full, ["orchard", "valueBalanceZat"]) || 0
       ironwood = get_in(full, ["ironwood", "valueBalanceZat"]) || 0
-
       fee_zats = vin_sum - vout_sum - vpub_old + vpub_new + sapling + orchard + ironwood
       fee_zats / 100_000_000.0
     end
