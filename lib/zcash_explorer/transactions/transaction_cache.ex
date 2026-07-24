@@ -2,16 +2,18 @@ defmodule ZcashExplorer.Transactions.TransactionWarmer do
   use Cachex.Warmer
   require Logger
 
+  @rpc_timeout 60_000
+
   def interval, do: :timer.seconds(15)
 
   def execute(_state) do
-    case Zcashex.getblockcount() do
-      {:ok, n} ->
+    case safe_rpc(:getblockcount, [], @rpc_timeout) do
+      {:ok, n} when is_integer(n) ->
         blocks =
           Enum.to_list((n - 20)..n)
           |> Enum.map(fn x ->
-            case Zcashex.getblock(x, 2) do
-              {:ok, block} -> block
+            case safe_rpc(:getblock, [x, 2], @rpc_timeout) do
+              {:ok, block} when is_map(block) -> block
               _ -> nil
             end
           end)
@@ -25,8 +27,8 @@ defmodule ZcashExplorer.Transactions.TransactionWarmer do
         |> Enum.map(fn y ->
           txid = y["txid"] || y[:txid]
 
-          case Zcashex.getrawtransaction(txid, 1) do
-            {:ok, tx} -> Zcashex.Transaction.from_map(tx)
+          case safe_rpc(:getrawtransaction, [txid, 1], @rpc_timeout) do
+            {:ok, tx} when is_map(tx) -> Zcashex.Transaction.from_map(tx)
             _ -> nil
           end
         end)
@@ -77,8 +79,30 @@ defmodule ZcashExplorer.Transactions.TransactionWarmer do
         end)
         |> handle_result()
 
+      {:ok, other} ->
+        Logger.warning("TransactionWarmer: unexpected getblockcount result: #{inspect(other)}")
+        :ignore
+
       {:error, reason} ->
-        handle_result({:error, reason})
+        Logger.warning("TransactionWarmer: getblockcount failed: #{inspect(reason)}")
+        :ignore
+    end
+  end
+
+  defp safe_rpc(method, params, timeout) do
+    try do
+      call =
+        case params do
+          [] -> {:call_endpoint, method}
+          _ -> {:call_endpoint, method, params}
+        end
+
+      case GenServer.call(Zcashex, call, timeout) do
+        {:ok, result} -> {:ok, result}
+        other -> {:error, other}
+      end
+    catch
+      :exit, reason -> {:error, reason}
     end
   end
 
@@ -108,8 +132,8 @@ defmodule ZcashExplorer.Transactions.TransactionWarmer do
         txid = Map.get(vin, :txid) || Map.get(vin, "txid")
         vout_idx = Map.get(vin, :vout) || Map.get(vin, "vout")
 
-        case Zcashex.getrawtransaction(txid, 1) do
-          {:ok, prev} ->
+        case safe_rpc(:getrawtransaction, [txid, 1], @rpc_timeout) do
+          {:ok, prev} when is_map(prev) ->
             vouts = prev["vout"] || []
             out = Enum.at(vouts, vout_idx || 0) || %{}
             (out["value"] || 0.0) * 1.0
