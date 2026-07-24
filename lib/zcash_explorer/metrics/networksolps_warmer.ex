@@ -33,9 +33,6 @@ defmodule ZcashExplorer.Metrics.NetworkSolpsWarmer do
     end
   end
 
-  # ignores the warmer result in case of error
-  defp handle_result({:error, _reason}), do: :ignore
-
   defp handle_result({:ok, info}) do
     {:ok, [{"networksolps", info}]}
   end
