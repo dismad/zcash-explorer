@@ -54,6 +54,9 @@ defmodule ZcashExplorer.Transactions.TransactionWarmer do
               ZcashExplorerWeb.TransactionHelper.classify(z)
             end
 
+          turnstile? = ZcashExplorerWeb.TransactionHelper.turnstile?(z)
+          turnstile_zat = ZcashExplorerWeb.TransactionHelper.turnstile_amount_zats(z)
+
           %{
             "txid" => Map.get(z, :txid),
             "block_height" => Map.get(z, :height),
@@ -66,7 +69,10 @@ defmodule ZcashExplorer.Transactions.TransactionWarmer do
             # STRING type name only — never HTML from tx_type/1
             "type" => type_name,
             "pools" => pools,
-            "is_coinbase" => coinbase?
+            "is_coinbase" => coinbase?,
+            "turnstile" => turnstile?,
+            "turnstile_zat" => turnstile_zat,
+            "turnstile_zec" => turnstile_zat / 100_000_000.0
           }
         end)
         |> handle_result()
