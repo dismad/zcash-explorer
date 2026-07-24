@@ -7,12 +7,12 @@ defmodule ZcashExplorer.Transactions.TransactionWarmer do
   def interval, do: :timer.seconds(15)
 
   def execute(_state) do
-    case safe_rpc(:getblockcount, [], @rpc_timeout) do
+    case safe_call(fn -> Zcashex.getblockcount() end) do
       {:ok, n} when is_integer(n) ->
         blocks =
           Enum.to_list((n - 20)..n)
-          |> Enum.map(fn x ->
-            case safe_rpc(:getblock, [x, 2], @rpc_timeout) do
+          |> Enum.map(fn height ->
+            case safe_call(fn -> Zcashex.getblock(height, 2) end) do
               {:ok, block} when is_map(block) -> block
               _ -> nil
             end
@@ -27,7 +27,7 @@ defmodule ZcashExplorer.Transactions.TransactionWarmer do
         |> Enum.map(fn y ->
           txid = y["txid"] || y[:txid]
 
-          case safe_rpc(:getrawtransaction, [txid, 1], @rpc_timeout) do
+          case safe_call(fn -> Zcashex.getrawtransaction(txid, 1) end) do
             {:ok, tx} when is_map(tx) -> Zcashex.Transaction.from_map(tx)
             _ -> nil
           end
@@ -79,31 +79,28 @@ defmodule ZcashExplorer.Transactions.TransactionWarmer do
         end)
         |> handle_result()
 
-      {:ok, other} ->
-        Logger.warning("TransactionWarmer: unexpected getblockcount result: #{inspect(other)}")
-        :ignore
-
       {:error, reason} ->
         Logger.warning("TransactionWarmer: getblockcount failed: #{inspect(reason)}")
+        :ignore
+
+      other ->
+        Logger.warning("TransactionWarmer: unexpected getblockcount result: #{inspect(other)}")
         :ignore
     end
   end
 
-  defp safe_rpc(method, params, timeout) do
-    try do
-      call =
-        case params do
-          [] -> {:call_endpoint, method}
-          _ -> {:call_endpoint, method, params}
-        end
+  # Use Zcashex.* APIs (correct params) with a timeout; never kill the warmer on exit.
+  defp safe_call(fun) when is_function(fun, 0) do
+    task = Task.async(fun)
 
-      case GenServer.call(Zcashex, call, timeout) do
-        {:ok, result} -> {:ok, result}
-        other -> {:error, other}
-      end
-    catch
-      :exit, reason -> {:error, reason}
+    case Task.yield(task, @rpc_timeout) || Task.shutdown(task, :brutal_kill) do
+      {:ok, {:ok, result}} -> {:ok, result}
+      {:ok, {:error, reason}} -> {:error, reason}
+      {:ok, other} -> {:error, other}
+      nil -> {:error, :timeout}
     end
+  catch
+    :exit, reason -> {:error, reason}
   end
 
   defp tx_in_total(tx) do
@@ -132,7 +129,7 @@ defmodule ZcashExplorer.Transactions.TransactionWarmer do
         txid = Map.get(vin, :txid) || Map.get(vin, "txid")
         vout_idx = Map.get(vin, :vout) || Map.get(vin, "vout")
 
-        case safe_rpc(:getrawtransaction, [txid, 1], @rpc_timeout) do
+        case safe_call(fn -> Zcashex.getrawtransaction(txid, 1) end) do
           {:ok, prev} when is_map(prev) ->
             vouts = prev["vout"] || []
             out = Enum.at(vouts, vout_idx || 0) || %{}
