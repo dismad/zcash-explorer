@@ -5,12 +5,16 @@ defmodule ZcashExplorerWeb.BlockRadarLive do
   @tick_interval 1_000
   @refresh_every 5
 
-  # Zoom presets (inclusive window size = value + 1)
+  # Zoom presets (inclusive count = value + 1)
   @zoom_dense 399
   @zoom_medium 143
   @zoom_tight 47
 
-    def mount(_params, _session, socket) do
+  # EMA for stable (network) color baseline
+  @ema_alpha 0.05
+  @default_avg_size 12_000.0
+
+  def mount(_params, _session, socket) do
     if connected?(socket) do
       Process.send_after(self(), :tick, @tick_interval)
     end
@@ -30,11 +34,16 @@ defmodule ZcashExplorerWeb.BlockRadarLive do
         get_recent_blocks() |> Enum.take(window + 1)
       end
 
+    rolling = calculate_rolling_avg_size(blocks)
+    network_avg = seed_network_avg(blocks, @default_avg_size)
+
     {:ok,
      socket
      |> assign(:blocks, blocks)
      |> assign(:tip_height, tip_height(blocks) || chain_tip)
-     |> assign(:rolling_avg_size, calculate_rolling_avg_size(blocks))
+     |> assign(:rolling_avg_size, rolling)
+     |> assign(:network_avg_size, network_avg)
+     |> assign(:color_mode, "network")
      |> assign(:current_time, DateTime.utc_now())
      |> assign(:tick_count, 0)
      |> assign(:zoom_window, window)
@@ -83,13 +92,22 @@ defmodule ZcashExplorerWeb.BlockRadarLive do
         socket.assigns.blocks |> Enum.take(window + 1)
       end
 
+    rolling = calculate_rolling_avg_size(blocks)
+
     {:noreply,
      socket
      |> assign(:zoom_window, window)
      |> assign(:blocks, blocks)
      |> assign(:tip_height, tip_height(blocks) || chain_tip)
-     |> assign(:rolling_avg_size, calculate_rolling_avg_size(blocks))}
+     |> assign(:rolling_avg_size, rolling)}
   end
+
+  def handle_event("color_mode", %{"mode" => mode}, socket)
+      when mode in ["window", "network"] do
+    {:noreply, assign(socket, :color_mode, mode)}
+  end
+
+  def handle_event("color_mode", _params, socket), do: {:noreply, socket}
 
   defp refresh_blocks(socket) do
     chain_tip =
@@ -109,11 +127,16 @@ defmodule ZcashExplorerWeb.BlockRadarLive do
 
       true ->
         blocks = load_blocks_for_tip(chain_tip, socket.assigns.blocks, window)
+        rolling = calculate_rolling_avg_size(blocks)
+
+        network_avg =
+          update_network_avg(socket.assigns.network_avg_size, blocks)
 
         socket
         |> assign(:blocks, blocks)
         |> assign(:tip_height, tip_height(blocks) || chain_tip)
-        |> assign(:rolling_avg_size, calculate_rolling_avg_size(blocks))
+        |> assign(:rolling_avg_size, rolling)
+        |> assign(:network_avg_size, network_avg)
     end
   end
 
@@ -192,17 +215,39 @@ defmodule ZcashExplorerWeb.BlockRadarLive do
 
   defp calculate_rolling_avg_size(blocks) do
     if Enum.empty?(blocks) do
-      12_000.0
+      @default_avg_size
     else
-      sizes = Enum.map(blocks, & &1["size"])
+      sizes = Enum.map(blocks, &(&1["size"] || 0))
       Enum.sum(sizes) / max(length(sizes), 1)
     end
   end
 
-  defp compute_reflectivity(block, previous_block, rolling_avg_size) do
+  defp seed_network_avg(blocks, fallback) do
+    if Enum.empty?(blocks) do
+      fallback
+    else
+      calculate_rolling_avg_size(blocks)
+    end
+  end
+
+  defp update_network_avg(current_avg, blocks) do
+    case blocks do
+      [newest | _] ->
+        size = (newest["size"] || current_avg) * 1.0
+        @ema_alpha * size + (1.0 - @ema_alpha) * current_avg
+
+      _ ->
+        current_avg
+    end
+  end
+
+  defp baseline_size("window", rolling_avg, _network_avg), do: max(rolling_avg, 1.0)
+  defp baseline_size(_mode, _rolling_avg, network_avg), do: max(network_avg, 1.0)
+
+  defp compute_reflectivity(block, previous_block, baseline_size) do
     delta_t = max(parse_time(block["time"]) - parse_time(previous_block["time"]), 1.0)
     throughput = block["size"] / delta_t
-    target_throughput = rolling_avg_size / @target_interval
+    target_throughput = baseline_size / @target_interval
     normalized = throughput / target_throughput
     dbz = 10 * :math.log10(max(normalized, 0.001)) + 25
     max(0, min(80, dbz))
@@ -217,8 +262,8 @@ defmodule ZcashExplorerWeb.BlockRadarLive do
 
   defp parse_time(_), do: 0
 
-  defp normalized_size(block, rolling_avg_size) do
-    min(3.0, block["size"] / max(rolling_avg_size, 1.0))
+  defp normalized_size(block, baseline_size) do
+    min(3.0, block["size"] / max(baseline_size, 1.0))
   end
 
   defp dbz_to_color(dbz) do
@@ -239,6 +284,16 @@ defmodule ZcashExplorerWeb.BlockRadarLive do
     base = "px-3 py-1 rounded-lg text-xs font-medium border transition"
 
     if current == level do
+      base <> " bg-cyan-600 border-cyan-500 text-white"
+    else
+      base <> " bg-zinc-900 border-zinc-700 text-zinc-300 hover:border-zinc-500"
+    end
+  end
+
+  defp mode_btn_class(current, mode) do
+    base = "px-3 py-1 rounded-lg text-xs font-medium border transition"
+
+    if current == mode do
       base <> " bg-cyan-600 border-cyan-500 text-white"
     else
       base <> " bg-zinc-900 border-zinc-700 text-zinc-300 hover:border-zinc-500"
@@ -288,33 +343,54 @@ defmodule ZcashExplorerWeb.BlockRadarLive do
         </header>
         <div class="max-w-7xl mx-auto p-6">
           <div class="max-w-[1150px] mx-auto">
-            <!-- Zoom controls -->
-            <div class="mb-6 flex flex-wrap items-center justify-center gap-2">
-              <span class="text-xs text-zinc-500 mr-1">Zoom</span>
-              <button
-                type="button"
-                phx-click="zoom"
-                phx-value-level="dense"
-                class={zoom_btn_class(@zoom_window, @zoom_dense)}
-              >
-                Dense (<%= @zoom_dense + 1 %>)
-              </button>
-              <button
-                type="button"
-                phx-click="zoom"
-                phx-value-level="medium"
-                class={zoom_btn_class(@zoom_window, @zoom_medium)}
-              >
-                Medium (<%= @zoom_medium + 1 %>)
-              </button>
-              <button
-                type="button"
-                phx-click="zoom"
-                phx-value-level="tight"
-                class={zoom_btn_class(@zoom_window, @zoom_tight)}
-              >
-                Tight (<%= @zoom_tight + 1 %>)
-              </button>
+            <!-- Zoom + color mode -->
+            <div class="mb-6 flex flex-wrap items-center justify-center gap-x-4 gap-y-2">
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="text-xs text-zinc-500 mr-1">Zoom</span>
+                <button
+                  type="button"
+                  phx-click="zoom"
+                  phx-value-level="dense"
+                  class={zoom_btn_class(@zoom_window, @zoom_dense)}
+                >
+                  Dense (<%= @zoom_dense + 1 %>)
+                </button>
+                <button
+                  type="button"
+                  phx-click="zoom"
+                  phx-value-level="medium"
+                  class={zoom_btn_class(@zoom_window, @zoom_medium)}
+                >
+                  Medium (<%= @zoom_medium + 1 %>)
+                </button>
+                <button
+                  type="button"
+                  phx-click="zoom"
+                  phx-value-level="tight"
+                  class={zoom_btn_class(@zoom_window, @zoom_tight)}
+                >
+                  Tight (<%= @zoom_tight + 1 %>)
+                </button>
+              </div>
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="text-xs text-zinc-500 mr-1">Color</span>
+                <button
+                  type="button"
+                  phx-click="color_mode"
+                  phx-value-mode="network"
+                  class={mode_btn_class(@color_mode, "network")}
+                >
+                  Stable
+                </button>
+                <button
+                  type="button"
+                  phx-click="color_mode"
+                  phx-value-mode="window"
+                  class={mode_btn_class(@color_mode, "window")}
+                >
+                  Relative
+                </button>
+              </div>
             </div>
 
             <!-- Main dBZ Legend -->
@@ -330,6 +406,13 @@ defmodule ZcashExplorerWeb.BlockRadarLive do
               <p class="text-xs text-zinc-400 mt-2 text-center">
                 Main grid: Recent blocks • Color = throughput reflectivity (bigger + faster = stronger echo)
               </p>
+              <p class="text-xs text-zinc-500 mt-1 text-center">
+                <%= if @color_mode == "window" do %>
+                  Relative mode: colors vs this window’s average (may shift when a new block arrives)
+                <% else %>
+                  Stable mode: colors vs slow network baseline (history stays steady as the tip moves)
+                <% end %>
+              </p>
             </div>
             <div class="flex flex-col lg:flex-row gap-8 items-start justify-center">
               <!-- Main Grid -->
@@ -338,10 +421,11 @@ defmodule ZcashExplorerWeb.BlockRadarLive do
                   <div class="absolute inset-0 bg-[repeating-linear-gradient(90deg,#27272a_0,#27272a_1px,transparent_1px,transparent_12px)] opacity-30 pointer-events-none"></div>
                   <div class="absolute inset-0 bg-[repeating-linear-gradient(180deg,#27272a_0,#27272a_1px,transparent_1px,transparent_12px)] opacity-30 pointer-events-none"></div>
                   <div class="grid grid-cols-12 gap-px h-full bg-black/80 rounded-2xl overflow-hidden">
+                    <% base = baseline_size(@color_mode, @rolling_avg_size, @network_avg_size) %>
                     <%= for {block, idx} <- Enum.with_index(@blocks) do %>
                       <% prev = Enum.at(@blocks, idx + 1) || block
-                         reflectivity = compute_reflectivity(block, prev, @rolling_avg_size)
-                         size_norm = normalized_size(block, @rolling_avg_size)
+                         reflectivity = compute_reflectivity(block, prev, base)
+                         size_norm = normalized_size(block, base)
                          is_most_recent = idx == 0 %>
                       <a
                         href={"/blocks/#{block["hash"]}"}
@@ -371,10 +455,11 @@ defmodule ZcashExplorerWeb.BlockRadarLive do
                 <div class="flex items-start gap-4">
                   <div class="relative bg-zinc-950 border border-zinc-800 rounded-3xl h-[520px] overflow-hidden shadow-2xl w-20 flex-shrink-0">
                     <div class="absolute inset-0 flex flex-col justify-end items-center gap-3 p-3">
+                      <% base = baseline_size(@color_mode, @rolling_avg_size, @network_avg_size) %>
                       <%= for {block, idx} <- Enum.with_index(Enum.take(@blocks, 25)) do %>
                         <% prev = Enum.at(@blocks, idx + 1) || block
-                           reflectivity = compute_reflectivity(block, prev, @rolling_avg_size)
-                           size_norm = normalized_size(block, @rolling_avg_size) %>
+                           reflectivity = compute_reflectivity(block, prev, base)
+                           size_norm = normalized_size(block, base) %>
                         <div
                           class="raindrop relative flex items-center justify-center text-[8px] font-mono text-white/90 drop-shadow-[0_1px_1px_rgba(0,0,0,0.9)]"
                           style={"width: #{9 + size_norm * 13}px;
@@ -403,7 +488,9 @@ defmodule ZcashExplorerWeb.BlockRadarLive do
                 </summary>
                 <p class="text-sm text-zinc-400 mb-6">
                   The radar combines two variables into one “reflectivity” value: <strong>throughput = block size ÷ time since previous block</strong>.<br>
-                  This is normalized against the network average and mapped to a dBZ-like scale (logarithmic, like real weather radar).
+                  This is normalized against a baseline and mapped to a dBZ-like scale (logarithmic, like real weather radar).<br><br>
+                  <strong>Stable</strong> uses a slow network baseline (colors stay steady as new blocks arrive).<br>
+                  <strong>Relative</strong> uses the average of the blocks currently on screen (colors can shift when the window moves).
                 </p>
                 <div class="overflow-x-auto">
                   <table class="w-full text-sm border border-zinc-700 rounded-2xl overflow-hidden">
