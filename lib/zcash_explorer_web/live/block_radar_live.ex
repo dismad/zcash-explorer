@@ -5,25 +5,43 @@ defmodule ZcashExplorerWeb.BlockRadarLive do
   @tick_interval 1_000
   @refresh_every 5
 
+  # Zoom presets (inclusive window size = value + 1)
+  @zoom_dense 399
+  @zoom_medium 143
+  @zoom_tight 47
+
   def mount(_params, _session, socket) do
     if connected?(socket) do
       Process.send_after(self(), :tick, @tick_interval)
     end
 
-    blocks = get_recent_blocks()
+    window = @zoom_dense
+
+    chain_tip =
+      case Zcashex.getblockcount() do
+        {:ok, n} when is_integer(n) -> n
+        _ -> nil
+      end
+
+    blocks =
+      if chain_tip do
+        load_blocks_for_tip(chain_tip, [], window)
+      else
+        get_recent_blocks() |> Enum.take(window + 1)
+      end
 
     {:ok,
      socket
      |> assign(:blocks, blocks)
-     |> assign(:tip_height, tip_height(blocks))
+     |> assign(:tip_height, tip_height(blocks) || chain_tip)
      |> assign(:rolling_avg_size, calculate_rolling_avg_size(blocks))
      |> assign(:current_time, DateTime.utc_now())
-     |> assign(:tick_count, 0)}
+     |> assign(:tick_count, 0)
+     |> assign(:zoom_window, window)}
   end
 
   def handle_info(:tick, socket) do
     Process.send_after(self(), :tick, @tick_interval)
-
     tick_count = socket.assigns.tick_count + 1
 
     socket =
@@ -39,12 +57,45 @@ defmodule ZcashExplorerWeb.BlockRadarLive do
      |> assign(:tick_count, tick_count)}
   end
 
+  def handle_event("zoom", %{"level" => level}, socket) do
+    window =
+      case level do
+        "dense" -> @zoom_dense
+        "medium" -> @zoom_medium
+        "tight" -> @zoom_tight
+        _ -> socket.assigns.zoom_window
+      end
+
+    chain_tip =
+      socket.assigns.tip_height ||
+        case Zcashex.getblockcount() do
+          {:ok, n} when is_integer(n) -> n
+          _ -> nil
+        end
+
+    blocks =
+      if chain_tip do
+        load_blocks_for_tip(chain_tip, socket.assigns.blocks, window)
+      else
+        socket.assigns.blocks |> Enum.take(window + 1)
+      end
+
+    {:noreply,
+     socket
+     |> assign(:zoom_window, window)
+     |> assign(:blocks, blocks)
+     |> assign(:tip_height, tip_height(blocks) || chain_tip)
+     |> assign(:rolling_avg_size, calculate_rolling_avg_size(blocks))}
+  end
+
   defp refresh_blocks(socket) do
     chain_tip =
       case Zcashex.getblockcount() do
         {:ok, n} when is_integer(n) -> n
         _ -> nil
       end
+
+    window = socket.assigns.zoom_window || @zoom_dense
 
     cond do
       is_nil(chain_tip) ->
@@ -54,7 +105,7 @@ defmodule ZcashExplorerWeb.BlockRadarLive do
         socket
 
       true ->
-        blocks = load_blocks_for_tip(chain_tip, socket.assigns.blocks)
+        blocks = load_blocks_for_tip(chain_tip, socket.assigns.blocks, window)
 
         socket
         |> assign(:blocks, blocks)
@@ -63,28 +114,41 @@ defmodule ZcashExplorerWeb.BlockRadarLive do
     end
   end
 
-  defp load_blocks_for_tip(chain_tip, previous_blocks) do
-    cached = get_recent_blocks()
-    cached_tip = tip_height(cached)
+  defp load_blocks_for_tip(chain_tip, previous_blocks, window) do
+    known =
+      previous_blocks
+      |> Enum.reduce(%{}, fn b, acc ->
+        h = height_of(b)
+        if is_integer(h), do: Map.put(acc, h, b), else: acc
+      end)
 
-    cond do
-      cached_tip == chain_tip and cached != [] ->
-        cached
+    known =
+      case get_recent_blocks() do
+        cached when is_list(cached) ->
+          Enum.reduce(cached, known, fn b, acc ->
+            h = height_of(b)
+            if is_integer(h) and not Map.has_key?(acc, h), do: Map.put(acc, h, b), else: acc
+          end)
 
-      true ->
-        known = Map.new(previous_blocks, fn b -> {b["height"], b} end)
-        start_h = max(chain_tip - 143, 0)
+        _ ->
+          known
+      end
 
-        Enum.map(start_h..chain_tip, fn h ->
-          case Map.get(known, h) do
-            nil -> fetch_block_summary(h)
-            b -> b
-          end
-        end)
-        |> Enum.reject(&is_nil/1)
-        |> Enum.sort_by(& &1["height"], :desc)
-    end
+    start_h = max(chain_tip - window, 0)
+
+    Enum.map(start_h..chain_tip, fn h ->
+      case Map.get(known, h) do
+        nil -> fetch_block_summary(h)
+        b -> b
+      end
+    end)
+    |> Enum.reject(&is_nil/1)
+    |> Enum.sort_by(&height_of/1, :desc)
   end
+
+  defp height_of(%{"height" => h}) when is_integer(h), do: h
+  defp height_of(%{height: h}) when is_integer(h), do: h
+  defp height_of(_), do: nil
 
   defp fetch_block_summary(height) do
     case Zcashex.getblock(height, 1) do
@@ -128,7 +192,7 @@ defmodule ZcashExplorerWeb.BlockRadarLive do
       12_000.0
     else
       sizes = Enum.map(blocks, & &1["size"])
-      Enum.sum(sizes) / length(sizes)
+      Enum.sum(sizes) / max(length(sizes), 1)
     end
   end
 
@@ -151,7 +215,7 @@ defmodule ZcashExplorerWeb.BlockRadarLive do
   defp parse_time(_), do: 0
 
   defp normalized_size(block, rolling_avg_size) do
-    min(3.0, block["size"] / rolling_avg_size)
+    min(3.0, block["size"] / max(rolling_avg_size, 1.0))
   end
 
   defp dbz_to_color(dbz) do
@@ -165,6 +229,16 @@ defmodule ZcashExplorerWeb.BlockRadarLive do
       dbz < 65 -> "#ffbb00"
       dbz < 75 -> "#ff6600"
       true -> "#ff2200"
+    end
+  end
+
+  defp zoom_btn_class(current, level) do
+    base = "px-3 py-1 rounded-lg text-xs font-medium border transition"
+
+    if current == level do
+      base <> " bg-cyan-600 border-cyan-500 text-white"
+    else
+      base <> " bg-zinc-900 border-zinc-700 text-zinc-300 hover:border-zinc-500"
     end
   end
 
@@ -211,6 +285,35 @@ defmodule ZcashExplorerWeb.BlockRadarLive do
         </header>
         <div class="max-w-7xl mx-auto p-6">
           <div class="max-w-[1150px] mx-auto">
+            <!-- Zoom controls -->
+            <div class="mb-6 flex flex-wrap items-center justify-center gap-2">
+              <span class="text-xs text-zinc-500 mr-1">Zoom</span>
+              <button
+                type="button"
+                phx-click="zoom"
+                phx-value-level="dense"
+                class={zoom_btn_class(@zoom_window, @zoom_dense)}
+              >
+                Dense (<%= @zoom_dense + 1 %>)
+              </button>
+              <button
+                type="button"
+                phx-click="zoom"
+                phx-value-level="medium"
+                class={zoom_btn_class(@zoom_window, @zoom_medium)}
+              >
+                Medium (<%= @zoom_medium + 1 %>)
+              </button>
+              <button
+                type="button"
+                phx-click="zoom"
+                phx-value-level="tight"
+                class={zoom_btn_class(@zoom_window, @zoom_tight)}
+              >
+                Tight (<%= @zoom_tight + 1 %>)
+              </button>
+            </div>
+
             <!-- Main dBZ Legend -->
             <div class="mb-8 flex flex-col items-center">
               <div class="w-full h-7 rounded-xl border border-zinc-700 flex overflow-hidden shadow-inner" style="max-width: 980px;">
@@ -256,7 +359,7 @@ defmodule ZcashExplorerWeb.BlockRadarLive do
                   </div>
                 </div>
                 <p class="text-center text-xs text-zinc-500 mt-3">
-                  Most recent (top-left) → oldest • Checks for new blocks every 5s
+                  Most recent (top-left) → oldest • <%= length(@blocks) %> blocks • Checks for new blocks every 5s
                 </p>
               </div>
               <!-- Rain Column -->
