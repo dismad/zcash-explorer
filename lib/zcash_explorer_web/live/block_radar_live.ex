@@ -10,7 +10,7 @@ defmodule ZcashExplorerWeb.BlockRadarLive do
   @zoom_medium 143
   @zoom_tight 47
 
-  def mount(_params, _session, socket) do
+    def mount(_params, _session, socket) do
     if connected?(socket) do
       Process.send_after(self(), :tick, @tick_interval)
     end
@@ -37,9 +37,9 @@ defmodule ZcashExplorerWeb.BlockRadarLive do
      |> assign(:rolling_avg_size, calculate_rolling_avg_size(blocks))
      |> assign(:current_time, DateTime.utc_now())
      |> assign(:tick_count, 0)
-     |> assign(:zoom_window, window)}
-     |> assign(:zoom_dense, @zoom_dense)      
-     |> assign(:zoom_medium, @zoom_medium)    
+     |> assign(:zoom_window, window)
+     |> assign(:zoom_dense, @zoom_dense)
+     |> assign(:zoom_medium, @zoom_medium)
      |> assign(:zoom_tight, @zoom_tight)}
   end
 
