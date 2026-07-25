@@ -245,13 +245,15 @@ defmodule ZcashExplorerWeb.BlockRadarLive do
   defp baseline_size(_mode, _rolling_avg, network_avg), do: max(network_avg, 1.0)
 
   defp compute_reflectivity(block, previous_block, baseline_size) do
-    delta_t = max(parse_time(block["time"]) - parse_time(previous_block["time"]), 1.0)
-    throughput = block["size"] / delta_t
-    target_throughput = baseline_size / @target_interval
-    normalized = throughput / target_throughput
-    dbz = 10 * :math.log10(max(normalized, 0.001)) + 25
-    max(0, min(80, dbz))
-  end
+  delta_t = max(parse_time(block["time"]) - parse_time(previous_block["time"]), 1.0)
+  throughput = block["size"] / delta_t
+  target_throughput = baseline_size / @target_interval
+  normalized = throughput / max(target_throughput, 0.0001)
+
+  # Center average at ~45 dBZ; 12×log spreads typical variance across more colors
+  dbz = 12 * :math.log10(max(normalized, 0.001)) + 45
+  max(0, min(80, dbz))
+end
 
   defp parse_time(time) when is_binary(time) do
     case Timex.parse(time, "{ISO:Extended}") do
