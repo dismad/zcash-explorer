@@ -1,16 +1,13 @@
 defmodule ZcashExplorerWeb.BlockRadarLive do
   use Phoenix.LiveView, layout: false
 
-  @target_interval 75.0
   @tick_interval 1_000
   @refresh_every 5
 
-  # Zoom presets (inclusive count = value + 1)
   @zoom_dense 399
   @zoom_medium 143
   @zoom_tight 47
 
-  # EMA for stable (network) color baseline
   @ema_alpha 0.05
   @default_avg_size 12_000.0
 
@@ -20,6 +17,7 @@ defmodule ZcashExplorerWeb.BlockRadarLive do
     end
 
     window = @zoom_dense
+    target = target_interval()
 
     chain_tip =
       case Zcashex.getblockcount() do
@@ -44,6 +42,7 @@ defmodule ZcashExplorerWeb.BlockRadarLive do
      |> assign(:rolling_avg_size, rolling)
      |> assign(:network_avg_size, network_avg)
      |> assign(:color_mode, "network")
+     |> assign(:target_interval, target)
      |> assign(:current_time, DateTime.utc_now())
      |> assign(:tick_count, 0)
      |> assign(:zoom_window, window)
@@ -128,15 +127,20 @@ defmodule ZcashExplorerWeb.BlockRadarLive do
       true ->
         blocks = load_blocks_for_tip(chain_tip, socket.assigns.blocks, window)
         rolling = calculate_rolling_avg_size(blocks)
-
-        network_avg =
-          update_network_avg(socket.assigns.network_avg_size, blocks)
+        network_avg = update_network_avg(socket.assigns.network_avg_size, blocks)
 
         socket
         |> assign(:blocks, blocks)
         |> assign(:tip_height, tip_height(blocks) || chain_tip)
         |> assign(:rolling_avg_size, rolling)
         |> assign(:network_avg_size, network_avg)
+    end
+  end
+
+  defp target_interval do
+    case Application.get_env(:zcash_explorer, Zcashex, [])[:zcash_network] do
+      "testnet" -> 60.0
+      _ -> 75.0
     end
   end
 
@@ -177,19 +181,49 @@ defmodule ZcashExplorerWeb.BlockRadarLive do
   defp height_of(_), do: nil
 
   defp fetch_block_summary(height) do
-    case Zcashex.getblock(height, 1) do
-      {:ok, block} when is_map(block) ->
-        %{
-          "height" => block["height"] || height,
-          "size" => block["size"] || 0,
-          "hash" => block["hash"],
-          "time" => format_block_time(block["time"]),
-          "tx_count" => length(block["tx"] || [])
-        }
+    case do_getblock(height) do
+      {:ok, block} ->
+        summarize_block(height, block)
 
       _ ->
-        nil
+        # one retry
+        case do_getblock(height) do
+          {:ok, block} ->
+            summarize_block(height, block)
+
+          _ ->
+            placeholder_block(height)
+        end
     end
+  end
+
+  defp do_getblock(height) do
+    case Zcashex.getblock(height, 1) do
+      {:ok, block} when is_map(block) -> {:ok, block}
+      other -> other
+    end
+  end
+
+  defp summarize_block(height, block) do
+    %{
+      "height" => block["height"] || height,
+      "size" => block["size"] || 0,
+      "hash" => block["hash"],
+      "time" => format_block_time(block["time"]),
+      "tx_count" => length(block["tx"] || []),
+      "missing" => false
+    }
+  end
+
+  defp placeholder_block(height) do
+    %{
+      "height" => height,
+      "size" => 0,
+      "hash" => nil,
+      "time" => "",
+      "tx_count" => 0,
+      "missing" => true
+    }
   end
 
   defp format_block_time(unix) when is_integer(unix) do
@@ -214,26 +248,23 @@ defmodule ZcashExplorerWeb.BlockRadarLive do
   end
 
   defp calculate_rolling_avg_size(blocks) do
-    if Enum.empty?(blocks) do
+    present = Enum.reject(blocks, & &1["missing"])
+
+    if Enum.empty?(present) do
       @default_avg_size
     else
-      sizes = Enum.map(blocks, &(&1["size"] || 0))
+      sizes = Enum.map(present, &(&1["size"] || 0))
       Enum.sum(sizes) / max(length(sizes), 1)
     end
   end
 
   defp seed_network_avg(blocks, fallback) do
-    if Enum.empty?(blocks) do
-      fallback
-    else
-      calculate_rolling_avg_size(blocks)
-    end
+    if Enum.empty?(blocks), do: fallback, else: calculate_rolling_avg_size(blocks)
   end
 
   defp update_network_avg(current_avg, blocks) do
-    case blocks do
-      [newest | _] ->
-        size = (newest["size"] || current_avg) * 1.0
+    case Enum.find(blocks, &(not &1["missing"])) do
+      %{"size" => size} when is_number(size) ->
         @ema_alpha * size + (1.0 - @ema_alpha) * current_avg
 
       _ ->
@@ -244,18 +275,30 @@ defmodule ZcashExplorerWeb.BlockRadarLive do
   defp baseline_size("window", rolling_avg, _network_avg), do: max(rolling_avg, 1.0)
   defp baseline_size(_mode, _rolling_avg, network_avg), do: max(network_avg, 1.0)
 
-  defp compute_reflectivity(block, previous_block, baseline_size) do
-  delta_t = max(parse_time(block["time"]) - parse_time(previous_block["time"]), 1.0)
-  throughput = block["size"] / delta_t
-  target_throughput = baseline_size / @target_interval
-  normalized = throughput / max(target_throughput, 0.0001)
+  defp compute_reflectivity(block, previous_block, baseline_size, target_interval) do
+    if block["missing"] do
+      0.0
+    else
+      delta_t = max(parse_time(block["time"]) - parse_time(previous_block["time"]), 1.0)
+      throughput = (block["size"] || 0) / delta_t
+      target_throughput = baseline_size / target_interval
+      normalized = throughput / max(target_throughput, 0.0001)
 
-  # Center average at ~45 dBZ; 12×log spreads typical variance across more colors
-  dbz = 12 * :math.log10(max(normalized, 0.001)) + 45
-  max(0, min(80, dbz))
-end
+      # Wider spread; average ~45 dBZ
+      dbz = 15 * :math.log10(max(normalized, 0.001)) + 45
+      max(0, min(80, dbz))
+    end
+  end
 
-  defp parse_time(time) when is_binary(time) do
+  defp delta_t(block, previous_block) do
+    max(parse_time(block["time"]) - parse_time(previous_block["time"]), 1.0)
+  end
+
+  defp gap?(block, previous_block, target_interval) do
+    not block["missing"] and delta_t(block, previous_block) > 2 * target_interval
+  end
+
+  defp parse_time(time) when is_binary(time) and time != "" do
     case Timex.parse(time, "{ISO:Extended}") do
       {:ok, dt} -> DateTime.to_unix(dt)
       _ -> 0
@@ -265,7 +308,7 @@ end
   defp parse_time(_), do: 0
 
   defp normalized_size(block, baseline_size) do
-    min(3.0, block["size"] / max(baseline_size, 1.0))
+    if block["missing"], do: 0.0, else: min(3.0, (block["size"] || 0) / max(baseline_size, 1.0))
   end
 
   defp dbz_to_color(dbz) do
@@ -279,6 +322,20 @@ end
       dbz < 65 -> "#ffbb00"
       dbz < 75 -> "#ff6600"
       true -> "#ff2200"
+    end
+  end
+
+  defp cell_title(block, prev, reflectivity, base, target_interval) do
+    if block["missing"] do
+      "Block #{block["height"]} • data unavailable"
+    else
+      dt = round(delta_t(block, prev))
+      kb = round((block["size"] || 0) / 1024)
+      txs = block["tx_count"] || 0
+      gap = if dt > 2 * target_interval, do: " • long gap", else: ""
+
+      "Block #{block["height"]} • #{txs} txs • #{kb} KB • Δt #{dt}s • " <>
+        "#{round(reflectivity)} dBZ • baseline #{round(base)} B#{gap}"
     end
   end
 
@@ -325,7 +382,10 @@ end
               <%= if @blocks != [] do %>
                 <% latest = List.first(@blocks)
                    latest_time = parse_time(latest["time"])
-                   seconds_ago = DateTime.to_unix(@current_time) - latest_time %>
+                   seconds_ago =
+                     if latest_time > 0,
+                       do: DateTime.to_unix(@current_time) - latest_time,
+                       else: 0 %>
                 <div class="flex items-center gap-x-2">
                   <span class="relative flex h-3 w-3">
                     <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
@@ -345,57 +405,37 @@ end
         </header>
         <div class="max-w-7xl mx-auto p-6">
           <div class="max-w-[1150px] mx-auto">
-            <!-- Zoom + color mode -->
             <div class="mb-6 flex flex-wrap items-center justify-center gap-x-4 gap-y-2">
               <div class="flex flex-wrap items-center gap-2">
                 <span class="text-xs text-zinc-500 mr-1">Zoom</span>
-                <button
-                  type="button"
-                  phx-click="zoom"
-                  phx-value-level="dense"
-                  class={zoom_btn_class(@zoom_window, @zoom_dense)}
-                >
+                <button type="button" phx-click="zoom" phx-value-level="dense"
+                  class={zoom_btn_class(@zoom_window, @zoom_dense)}>
                   Dense (<%= @zoom_dense + 1 %>)
                 </button>
-                <button
-                  type="button"
-                  phx-click="zoom"
-                  phx-value-level="medium"
-                  class={zoom_btn_class(@zoom_window, @zoom_medium)}
-                >
+                <button type="button" phx-click="zoom" phx-value-level="medium"
+                  class={zoom_btn_class(@zoom_window, @zoom_medium)}>
                   Medium (<%= @zoom_medium + 1 %>)
                 </button>
-                <button
-                  type="button"
-                  phx-click="zoom"
-                  phx-value-level="tight"
-                  class={zoom_btn_class(@zoom_window, @zoom_tight)}
-                >
+                <button type="button" phx-click="zoom" phx-value-level="tight"
+                  class={zoom_btn_class(@zoom_window, @zoom_tight)}>
                   Tight (<%= @zoom_tight + 1 %>)
                 </button>
               </div>
               <div class="flex flex-wrap items-center gap-2">
                 <span class="text-xs text-zinc-500 mr-1">Color</span>
-                <button
-                  type="button"
-                  phx-click="color_mode"
-                  phx-value-mode="network"
+                <button type="button" phx-click="color_mode" phx-value-mode="network"
                   class={mode_btn_class(@color_mode, "network")}
-                >
+                  title="vs slow network baseline — history stays steady">
                   Stable
                 </button>
-                <button
-                  type="button"
-                  phx-click="color_mode"
-                  phx-value-mode="window"
+                <button type="button" phx-click="color_mode" phx-value-mode="window"
                   class={mode_btn_class(@color_mode, "window")}
-                >
-                  Relative
+                  title="vs this window’s average — max contrast in view">
+                  Relative (contrast)
                 </button>
               </div>
             </div>
 
-            <!-- Main dBZ Legend -->
             <div class="mb-8 flex flex-col items-center">
               <div class="w-full h-7 rounded-xl border border-zinc-700 flex overflow-hidden shadow-inner" style="max-width: 980px;">
                 <%= for i <- 0..80 do %>
@@ -406,18 +446,19 @@ end
                 <span>0</span><span>20</span><span>40</span><span>60</span><span>80 dBZ</span>
               </div>
               <p class="text-xs text-zinc-400 mt-2 text-center">
-                Main grid: Recent blocks • Color = throughput reflectivity (bigger + faster = stronger echo)
+                Color = size ÷ Δt vs baseline (not tx count) • Target interval <%= @target_interval %>s
+                • Long gaps get a white border
               </p>
               <p class="text-xs text-zinc-500 mt-1 text-center">
                 <%= if @color_mode == "window" do %>
-                  Relative mode: colors vs this window’s average (may shift when a new block arrives)
+                  Relative: max contrast in this view (colors can shift when the tip or zoom changes)
                 <% else %>
-                  Stable mode: colors vs slow network baseline (history stays steady as the tip moves)
+                  Stable: slow network baseline (history stays steady as the tip moves)
                 <% end %>
               </p>
             </div>
+
             <div class="flex flex-col lg:flex-row gap-8 items-start justify-center">
-              <!-- Main Grid -->
               <div class="flex-1 max-w-[980px]">
                 <div class="relative bg-zinc-950 border-2 border-zinc-800 rounded-3xl pt-5 pb-3 px-4 shadow-2xl" style="aspect-ratio: 1 / 1;">
                   <div class="absolute inset-0 bg-[repeating-linear-gradient(90deg,#27272a_0,#27272a_1px,transparent_1px,transparent_12px)] opacity-30 pointer-events-none"></div>
@@ -426,21 +467,31 @@ end
                     <% base = baseline_size(@color_mode, @rolling_avg_size, @network_avg_size) %>
                     <%= for {block, idx} <- Enum.with_index(@blocks) do %>
                       <% prev = Enum.at(@blocks, idx + 1) || block
-                         reflectivity = compute_reflectivity(block, prev, base)
+                         reflectivity = compute_reflectivity(block, prev, base, @target_interval)
                          size_norm = normalized_size(block, base)
-                         is_most_recent = idx == 0 %>
+                         is_most_recent = idx == 0
+                         is_gap = gap?(block, prev, @target_interval)
+                         is_missing = block["missing"] == true
+                         bg = if is_missing, do: "#27272a", else: dbz_to_color(reflectivity)
+                         ring =
+                           cond do
+                             is_missing -> "box-shadow: inset 0 0 0 1px #52525b;"
+                             is_gap -> "box-shadow: inset 0 0 0 2px rgba(255,255,255,0.85);"
+                             true -> "box-shadow: inset 0 0 #{round(4 + size_norm * 8)}px #{bg}44;"
+                           end
+                         href = if block["hash"], do: "/blocks/#{block["hash"]}", else: "#" %>
                       <a
-                        href={"/blocks/#{block["hash"]}"}
-                        class="relative aspect-square flex items-center justify-center rounded border border-zinc-900/30 transition-all hover:brightness-110 hover:ring-1 hover:ring-cyan-400/30 overflow-hidden"
-                        style={"background-color: #{dbz_to_color(reflectivity)};
-                               box-shadow: inset 0 0 #{round(4 + size_norm * 8)}px #{dbz_to_color(reflectivity)}44;
-                               transform: scale(#{1.0 + size_norm * 0.08});"}
-                        title={"Block #{block["height"]} • #{block["tx_count"] || length(block["tx"] || [])} txs • #{round(block["size"]/1024)} KB • Δt #{round(max(parse_time(block["time"]) - parse_time(prev["time"]), 1))}s • #{round(reflectivity)} dBZ"}
+                        href={href}
+                        id={"radar-cell-#{block["height"]}"}
+                        class={"relative aspect-square flex items-center justify-center rounded border border-zinc-900/30 transition-all overflow-hidden " <>
+                          if(is_missing, do: "opacity-60 cursor-default", else: "hover:brightness-110 hover:ring-1 hover:ring-cyan-400/30")}
+                        style={"background-color: #{bg}; #{ring}; transform: scale(#{1.0 + size_norm * 0.08});"}
+                        title={cell_title(block, prev, reflectivity, base, @target_interval)}
                       >
                         <span class="absolute top-1.5 left-1.5 text-[9px] font-mono text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)] z-10 leading-none">
                           <%= block["height"] %>
                         </span>
-                        <%= if is_most_recent do %>
+                        <%= if is_most_recent and not is_missing do %>
                           <div class="absolute inset-0 bg-gradient-to-r from-transparent via-cyan-300/30 to-transparent animate-[sweep_3s_linear_infinite]"></div>
                         <% end %>
                       </a>
@@ -448,10 +499,10 @@ end
                   </div>
                 </div>
                 <p class="text-center text-xs text-zinc-500 mt-3">
-                  Most recent (top-left) → oldest • <%= length(@blocks) %> blocks • Checks for new blocks every 5s
+                  Most recent (top-left) → oldest • <%= length(@blocks) %> blocks • Checks every 5s
                 </p>
               </div>
-              <!-- Rain Column -->
+
               <div class="flex flex-col items-center gap-3">
                 <div class="text-xs text-zinc-400 text-center tracking-widest">Rain visualization (Last 25 blocks)</div>
                 <div class="flex items-start gap-4">
@@ -460,16 +511,16 @@ end
                       <% base = baseline_size(@color_mode, @rolling_avg_size, @network_avg_size) %>
                       <%= for {block, idx} <- Enum.with_index(Enum.take(@blocks, 25)) do %>
                         <% prev = Enum.at(@blocks, idx + 1) || block
-                           base = baseline_size(@color_mode, @rolling_avg_size, @network_avg_size)
-                           reflectivity = compute_reflectivity(block, prev, base)
+                           reflectivity = compute_reflectivity(block, prev, base, @target_interval)
                            size_norm = normalized_size(block, base)
-                           delay_ms = rem(block["height"] * 97, 6000) %>
+                           delay_ms = rem((block["height"] || 0) * 97, 6000)
+                           bg = if block["missing"], do: "#27272a", else: dbz_to_color(reflectivity) %>
                         <div
                           id={"raindrop-#{block["height"]}"}
                           class="raindrop relative flex items-center justify-center text-[8px] font-mono text-white/90 drop-shadow-[0_1px_1px_rgba(0,0,0,0.9)]"
                           style={"width: #{9 + size_norm * 13}px;
                                  height: #{16 + size_norm * 11}px;
-                                 background-color: #{dbz_to_color(reflectivity)};
+                                 background-color: #{bg};
                                  animation-delay: -#{delay_ms}ms;"}
                         >
                           <%= block["height"] %>
@@ -478,13 +529,14 @@ end
                     </div>
                   </div>
                   <div class="text-[10px] text-zinc-500 leading-tight max-w-[160px]">
-                    Color = the block's reflectivity (exactly the same dBZ color used in the main grid — brighter/right-side colors mean bigger block + faster next block = stronger echo)<br><br>
-                    Size of the drop = relative block size (larger blocks appear as bigger/fatter drops)
+                    Color = same dBZ scale as the main grid (size ÷ Δt vs baseline).<br><br>
+                    Drop size = relative block size.<br><br>
+                    White border on grid cells = long gap (&gt; 2× target interval).
                   </div>
                 </div>
               </div>
             </div>
-            <!-- Table -->
+
             <div class="mt-12 max-w-[980px]">
               <details open>
                 <summary class="cursor-pointer text-lg font-semibold text-zinc-300 mb-4 flex items-center gap-2">
@@ -492,10 +544,14 @@ end
                   <span class="text-xs text-zinc-500">(click to collapse)</span>
                 </summary>
                 <p class="text-sm text-zinc-400 mb-6">
-                  The radar combines two variables into one “reflectivity” value: <strong>throughput = block size ÷ time since previous block</strong>.<br>
-                  This is normalized against a baseline and mapped to a dBZ-like scale (logarithmic, like real weather radar).<br><br>
-                  <strong>Stable</strong> uses a slow network baseline (colors stay steady as new blocks arrive).<br>
-                  <strong>Relative</strong> uses the average of the blocks currently on screen (colors can shift when the window moves).
+                  Reflectivity uses <strong>throughput = block size ÷ time since previous block</strong>,
+                  normalized to a baseline and mapped with
+                  <span class="font-mono">dBZ = 15·log10(normalized) + 45</span>
+                  (average ≈ mid-legend).<br><br>
+                  <strong>Stable</strong> — slow network EMA baseline (history stays steady).<br>
+                  <strong>Relative (contrast)</strong> — average of blocks on screen (max contrast; can shift on tip/zoom).<br>
+                  <strong>White cell border</strong> — Δt &gt; 2× target interval (<%= @target_interval %>s on this network).<br>
+                  Tx count is shown in the tooltip only; it does not drive color.
                 </p>
                 <div class="overflow-x-auto">
                   <table class="w-full text-sm border border-zinc-700 rounded-2xl overflow-hidden">
@@ -516,8 +572,8 @@ end
                         <td class="px-4 py-3 text-right font-mono text-zinc-400">5 KB</td>
                         <td class="px-4 py-3 text-right font-mono text-zinc-400">150 s</td>
                         <td class="px-4 py-3 text-right font-mono text-zinc-400">33 B/s</td>
-                        <td class="px-4 py-3 text-right font-mono text-zinc-400">8</td>
-                        <td class="px-4 py-3"><div class="w-8 h-8 mx-auto rounded" style="background-color: #4b0082;"></div></td>
+                        <td class="px-4 py-3 text-right font-mono text-zinc-400">~30</td>
+                        <td class="px-4 py-3"><div class="w-8 h-8 mx-auto rounded" style="background-color: #00cc88;"></div></td>
                         <td class="px-4 py-3"><div class="w-12 h-2 mx-auto bg-white/30 rounded" style="width: 30%;"></div></td>
                       </tr>
                       <tr class="hover:bg-zinc-900/50">
@@ -525,8 +581,8 @@ end
                         <td class="px-4 py-3 text-right font-mono text-zinc-400">12 KB</td>
                         <td class="px-4 py-3 text-right font-mono text-zinc-400">75 s</td>
                         <td class="px-4 py-3 text-right font-mono text-zinc-400">160 B/s</td>
-                        <td class="px-4 py-3 text-right font-mono text-zinc-400">35</td>
-                        <td class="px-4 py-3"><div class="w-8 h-8 mx-auto rounded" style="background-color: #88ee00;"></div></td>
+                        <td class="px-4 py-3 text-right font-mono text-zinc-400">~45</td>
+                        <td class="px-4 py-3"><div class="w-8 h-8 mx-auto rounded" style="background-color: #ffee00;"></div></td>
                         <td class="px-4 py-3"><div class="w-12 h-2 mx-auto bg-white/30 rounded" style="width: 60%;"></div></td>
                       </tr>
                       <tr class="hover:bg-zinc-900/50">
@@ -534,7 +590,7 @@ end
                         <td class="px-4 py-3 text-right font-mono text-zinc-400">30 KB</td>
                         <td class="px-4 py-3 text-right font-mono text-zinc-400">150 s</td>
                         <td class="px-4 py-3 text-right font-mono text-zinc-400">200 B/s</td>
-                        <td class="px-4 py-3 text-right font-mono text-zinc-400">35</td>
+                        <td class="px-4 py-3 text-right font-mono text-zinc-400">~47</td>
                         <td class="px-4 py-3"><div class="w-8 h-8 mx-auto rounded" style="background-color: #ffee00;"></div></td>
                         <td class="px-4 py-3"><div class="w-12 h-2 mx-auto bg-white/30 rounded" style="width: 95%;"></div></td>
                       </tr>
@@ -543,7 +599,7 @@ end
                         <td class="px-4 py-3 text-right font-mono text-zinc-400">6 KB</td>
                         <td class="px-4 py-3 text-right font-mono text-zinc-400">30 s</td>
                         <td class="px-4 py-3 text-right font-mono text-zinc-400">200 B/s</td>
-                        <td class="px-4 py-3 text-right font-mono text-zinc-400">35</td>
+                        <td class="px-4 py-3 text-right font-mono text-zinc-400">~47</td>
                         <td class="px-4 py-3"><div class="w-8 h-8 mx-auto rounded" style="background-color: #ffee00;"></div></td>
                         <td class="px-4 py-3"><div class="w-12 h-2 mx-auto bg-white/30 rounded" style="width: 30%;"></div></td>
                       </tr>
@@ -552,8 +608,8 @@ end
                         <td class="px-4 py-3 text-right font-mono text-zinc-400">30 KB</td>
                         <td class="px-4 py-3 text-right font-mono text-zinc-400">30 s</td>
                         <td class="px-4 py-3 text-right font-mono text-zinc-400">1,000 B/s</td>
-                        <td class="px-4 py-3 text-right font-mono text-zinc-400">65</td>
-                        <td class="px-4 py-3"><div class="w-8 h-8 mx-auto rounded" style="background-color: #ff6600;"></div></td>
+                        <td class="px-4 py-3 text-right font-mono text-zinc-400">~60</td>
+                        <td class="px-4 py-3"><div class="w-8 h-8 mx-auto rounded" style="background-color: #ffbb00;"></div></td>
                         <td class="px-4 py-3"><div class="w-12 h-2 mx-auto bg-white/30 rounded" style="width: 95%;"></div></td>
                       </tr>
                     </tbody>
