@@ -186,13 +186,9 @@ defmodule ZcashExplorerWeb.BlockRadarLive do
         summarize_block(height, block)
 
       _ ->
-        # one retry
         case do_getblock(height) do
-          {:ok, block} ->
-            summarize_block(height, block)
-
-          _ ->
-            placeholder_block(height)
+          {:ok, block} -> summarize_block(height, block)
+          _ -> placeholder_block(height)
         end
     end
   end
@@ -247,8 +243,11 @@ defmodule ZcashExplorerWeb.BlockRadarLive do
     end
   end
 
+  defp missing?(block) when is_map(block), do: block["missing"] == true
+  defp missing?(_), do: false
+
   defp calculate_rolling_avg_size(blocks) do
-    present = Enum.reject(blocks, & &1["missing"])
+    present = Enum.reject(blocks, &missing?/1)
 
     if Enum.empty?(present) do
       @default_avg_size
@@ -263,7 +262,7 @@ defmodule ZcashExplorerWeb.BlockRadarLive do
   end
 
   defp update_network_avg(current_avg, blocks) do
-    case Enum.find(blocks, &(not &1["missing"])) do
+    case Enum.find(blocks, fn b -> not missing?(b) end) do
       %{"size" => size} when is_number(size) ->
         @ema_alpha * size + (1.0 - @ema_alpha) * current_avg
 
@@ -276,15 +275,13 @@ defmodule ZcashExplorerWeb.BlockRadarLive do
   defp baseline_size(_mode, _rolling_avg, network_avg), do: max(network_avg, 1.0)
 
   defp compute_reflectivity(block, previous_block, baseline_size, target_interval) do
-    if block["missing"] do
+    if missing?(block) do
       0.0
     else
-      delta_t = max(parse_time(block["time"]) - parse_time(previous_block["time"]), 1.0)
-      throughput = (block["size"] || 0) / delta_t
+      dt = delta_t(block, previous_block)
+      throughput = (block["size"] || 0) / dt
       target_throughput = baseline_size / target_interval
       normalized = throughput / max(target_throughput, 0.0001)
-
-      # Wider spread; average ~45 dBZ
       dbz = 15 * :math.log10(max(normalized, 0.001)) + 45
       max(0, min(80, dbz))
     end
@@ -294,8 +291,13 @@ defmodule ZcashExplorerWeb.BlockRadarLive do
     max(parse_time(block["time"]) - parse_time(previous_block["time"]), 1.0)
   end
 
+  # IMPORTANT: never use `not block["missing"]` — nil is not a boolean
   defp gap?(block, previous_block, target_interval) do
-    not block["missing"] and delta_t(block, previous_block) > 2 * target_interval
+    if missing?(block) do
+      false
+    else
+      delta_t(block, previous_block) > 2 * target_interval
+    end
   end
 
   defp parse_time(time) when is_binary(time) and time != "" do
@@ -308,7 +310,11 @@ defmodule ZcashExplorerWeb.BlockRadarLive do
   defp parse_time(_), do: 0
 
   defp normalized_size(block, baseline_size) do
-    if block["missing"], do: 0.0, else: min(3.0, (block["size"] || 0) / max(baseline_size, 1.0))
+    if missing?(block) do
+      0.0
+    else
+      min(3.0, (block["size"] || 0) / max(baseline_size, 1.0))
+    end
   end
 
   defp dbz_to_color(dbz) do
@@ -326,7 +332,7 @@ defmodule ZcashExplorerWeb.BlockRadarLive do
   end
 
   defp cell_title(block, prev, reflectivity, base, target_interval) do
-    if block["missing"] do
+    if missing?(block) do
       "Block #{block["height"]} • data unavailable"
     else
       dt = round(delta_t(block, prev))
@@ -471,7 +477,7 @@ defmodule ZcashExplorerWeb.BlockRadarLive do
                          size_norm = normalized_size(block, base)
                          is_most_recent = idx == 0
                          is_gap = gap?(block, prev, @target_interval)
-                         is_missing = block["missing"] == true
+                         is_missing = missing?(block)
                          bg = if is_missing, do: "#27272a", else: dbz_to_color(reflectivity)
                          ring =
                            cond do
@@ -514,7 +520,7 @@ defmodule ZcashExplorerWeb.BlockRadarLive do
                            reflectivity = compute_reflectivity(block, prev, base, @target_interval)
                            size_norm = normalized_size(block, base)
                            delay_ms = rem((block["height"] || 0) * 97, 6000)
-                           bg = if block["missing"], do: "#27272a", else: dbz_to_color(reflectivity) %>
+                           bg = if missing?(block), do: "#27272a", else: dbz_to_color(reflectivity) %>
                         <div
                           id={"raindrop-#{block["height"]}"}
                           class="raindrop relative flex items-center justify-center text-[8px] font-mono text-white/90 drop-shadow-[0_1px_1px_rgba(0,0,0,0.9)]"
