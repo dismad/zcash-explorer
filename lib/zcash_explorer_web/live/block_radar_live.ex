@@ -458,14 +458,17 @@ defmodule ZcashExplorerWeb.BlockRadarLive do
                       <% base = baseline_size(@color_mode, @rolling_avg_size, @network_avg_size) %>
                       <%= for {block, idx} <- Enum.with_index(Enum.take(@blocks, 25)) do %>
                         <% prev = Enum.at(@blocks, idx + 1) || block
+                           base = baseline_size(@color_mode, @rolling_avg_size, @network_avg_size)
                            reflectivity = compute_reflectivity(block, prev, base)
-                           size_norm = normalized_size(block, base) %>
+                           size_norm = normalized_size(block, base)
+                           delay_ms = rem(block["height"] * 97, 6000) %>
                         <div
+                          id={"raindrop-#{block["height"]}"}
                           class="raindrop relative flex items-center justify-center text-[8px] font-mono text-white/90 drop-shadow-[0_1px_1px_rgba(0,0,0,0.9)]"
                           style={"width: #{9 + size_norm * 13}px;
                                  height: #{16 + size_norm * 11}px;
                                  background-color: #{dbz_to_color(reflectivity)};
-                                 animation-delay: #{rem(:erlang.unique_integer([:positive]), 6000)}ms;"}
+                                 animation-delay: -#{delay_ms}ms;"}
                         >
                           <%= block["height"] %>
                         </div>
