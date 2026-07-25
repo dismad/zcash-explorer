@@ -38,6 +38,9 @@ defmodule ZcashExplorerWeb.BlockRadarLive do
      |> assign(:current_time, DateTime.utc_now())
      |> assign(:tick_count, 0)
      |> assign(:zoom_window, window)}
+     |> assign(:zoom_dense, @zoom_dense)      
+     |> assign(:zoom_medium, @zoom_medium)    
+     |> assign(:zoom_tight, @zoom_tight)}
   end
 
   def handle_info(:tick, socket) do
