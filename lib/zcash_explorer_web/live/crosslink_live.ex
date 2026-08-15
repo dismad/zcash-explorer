@@ -124,6 +124,34 @@ defmodule ZcashExplorerWeb.CrosslinkLive do
         _ -> nil
       end
 
+    difficulty =
+      case ZcashExplorer.Crosslink.blockchain_info() do
+        {:ok, %{"difficulty" => d}} when is_number(d) ->
+          d
+
+        _ ->
+          case Cachex.get(:app_cache, "metrics") do
+            {:ok, %{"difficulty" => d}} when is_number(d) -> d
+            _ -> nil
+          end
+      end
+
+    network_solps =
+      case Cachex.get(:app_cache, "networksolps") do
+        {:ok, n} when is_number(n) ->
+          n
+
+        _ ->
+          try do
+            case GenServer.call(Zcashex, {:call_endpoint, "getnetworksolps", [120, -1]}, 12_000) do
+              {:ok, n} when is_number(n) -> n
+              _ -> nil
+            end
+          catch
+            :exit, _ -> nil
+          end
+      end
+
     finalizer_status_map = build_finalizer_status_map(recency)
     sunburst = build_sunburst(roster, finalizer_status_map)
 
@@ -134,6 +162,8 @@ defmodule ZcashExplorerWeb.CrosslinkLive do
       lag: if(height && tip && tip.height, do: height - tip.height, else: nil),
       pos_height: pos_height,
       finalizer_count: finalizer_count,
+      difficulty: difficulty,
+      network_solps: network_solps,
       staking_day: staking_day_info(height),
       roster: roster,
       total_stake: Enum.reduce(roster, 0.0, fn e, acc -> acc + e.stake end),
@@ -146,7 +176,7 @@ defmodule ZcashExplorerWeb.CrosslinkLive do
     }
   end
 
-  # --- online = voted at latest height ------------------------------------------
+  # --- online = voted at latest height ----------------------------------------
 
   defp online?(nil), do: false
 
@@ -384,6 +414,16 @@ defmodule ZcashExplorerWeb.CrosslinkLive do
 
   defp format_zat(_), do: "—"
 
+  defp format_solps(n) when is_number(n) do
+    cond do
+      n >= 1_000_000 -> :erlang.float_to_binary(n / 1_000_000.0, decimals: 2) <> " MSol/s"
+      n >= 1_000 -> :erlang.float_to_binary(n / 1_000.0, decimals: 2) <> " kSol/s"
+      true -> :erlang.float_to_binary(n * 1.0, decimals: 1) <> " Sol/s"
+    end
+  end
+
+  defp format_solps(_), do: "—"
+
   defp short_key(key) when is_binary(key) and byte_size(key) > 16 do
     String.slice(key, 0, 8) <> "…" <> String.slice(key, -6, 6)
   end
@@ -526,16 +566,19 @@ defmodule ZcashExplorerWeb.CrosslinkLive do
             </div>
           </div>
 
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <!-- PoW -->
             <div class="rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-5">
-              <h2 class="text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-4">Network</h2>
+              <h2 class="text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-4">
+                Proof of Work
+              </h2>
               <dl class="space-y-3 text-sm">
                 <div class="flex justify-between">
-                  <dt class="text-gray-500 dark:text-gray-400">PoW Height</dt>
+                  <dt class="text-gray-500 dark:text-gray-400">Height</dt>
                   <dd class="font-medium tabular-nums"><%= @data.height || "—" %></dd>
                 </div>
                 <div class="flex justify-between">
-                  <dt class="text-gray-500 dark:text-gray-400">PoW Finalized</dt>
+                  <dt class="text-gray-500 dark:text-gray-400">Finalized</dt>
                   <dd class="font-medium tabular-nums text-right">
                     <%= if @data.tip && @data.tip.hash do %>
                       <a href={"/blocks/#{@data.tip.hash}"} class="text-blue-600 dark:text-blue-400 hover:underline">
@@ -552,6 +595,39 @@ defmodule ZcashExplorerWeb.CrosslinkLive do
                   </dd>
                 </div>
                 <div class="flex justify-between">
+                  <dt class="text-gray-500 dark:text-gray-400">Difficulty</dt>
+                  <dd class="font-medium tabular-nums">
+                    <%= if @data.difficulty do %>
+                      <%= :erlang.float_to_binary(@data.difficulty * 1.0, decimals: 4) %>
+                    <% else %>
+                      —
+                    <% end %>
+                  </dd>
+                </div>
+                <div class="flex justify-between">
+                  <dt class="text-gray-500 dark:text-gray-400">Network Sol/s</dt>
+                  <dd class="font-medium tabular-nums"><%= format_solps(@data.network_solps) %></dd>
+                </div>
+              </dl>
+            </div>
+
+            <!-- PoS / TFL -->
+            <div class="rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-5">
+              <h2 class="text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-4">
+                Proof of Stake · TFL
+              </h2>
+              <dl class="space-y-3 text-sm">
+                <div class="flex justify-between">
+                  <dt class="text-gray-500 dark:text-gray-400">TFL Activated</dt>
+                  <dd class="font-medium">
+                    <%= case @data.activated do %>
+                      <% true -> %><span class="text-emerald-500">Yes</span>
+                      <% false -> %><span class="text-rose-500">No</span>
+                      <% _ -> %><span class="text-gray-400">—</span>
+                    <% end %>
+                  </dd>
+                </div>
+                <div class="flex justify-between">
                   <dt class="text-gray-500 dark:text-gray-400">PoS Height</dt>
                   <dd class="font-medium tabular-nums"><%= @data.pos_height || "—" %></dd>
                 </div>
@@ -559,10 +635,26 @@ defmodule ZcashExplorerWeb.CrosslinkLive do
                   <dt class="text-gray-500 dark:text-gray-400">BFT Finalizers</dt>
                   <dd class="font-medium tabular-nums"><%= @data.finalizer_count %></dd>
                 </div>
+                <div class="flex justify-between">
+                  <dt class="text-gray-500 dark:text-gray-400">Online stake</dt>
+                  <dd class="font-medium tabular-nums">
+                    <%= if @data.sunburst do %>
+                      <span class="text-emerald-500">
+                        <%= :erlang.float_to_binary(@data.sunburst.online_pct, decimals: 1) %>%
+                      </span>
+                    <% else %>
+                      —
+                    <% end %>
+                  </dd>
+                </div>
               </dl>
             </div>
+
+            <!-- Pools -->
             <div class="rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-5">
-              <h2 class="text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-4">Pools</h2>
+              <h2 class="text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-4">
+                Pools
+              </h2>
               <dl class="space-y-3 text-sm">
                 <div class="flex justify-between">
                   <dt class="text-gray-500 dark:text-gray-400">Orchard</dt>
