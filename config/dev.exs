@@ -5,54 +5,66 @@ config :zcash_explorer, ZcashExplorerWeb.Endpoint,
   debug_errors: true,
   code_reloader: true,
   check_origin: false,
+  secret_key_base: System.get_env("SECRET_KEY_BASE"),
+  live_view: [signing_salt: System.get_env("SIGNING_SALT")],
   watchers: [
-  node: [
-    "node_modules/webpack/bin/webpack.js",
-    "--mode",
-    "development",
-    "--watch-stdin",
-    cd: Path.expand("../assets", __DIR__)
-  ],
-  npm: [
-    "run",
-    "watch:css",
-    cd: Path.expand("../assets", __DIR__)
+    node: [
+      "node_modules/webpack/bin/webpack.js",
+      "--mode",
+      "development",
+      "--watch-stdin",
+      cd: Path.expand("../assets", __DIR__)
+    ],
+    npm: [
+      "run",
+      "watch:css",
+      cd: Path.expand("../assets", __DIR__)
+    ]
   ]
-]
 
-# Zebra + cookie authentication (safe version)
+# Crosslink / zebra-crosslink RPC config
+# Cookie auth is disabled on your node (enable_cookie_auth = false)
 config :zcash_explorer, Zcashex,
-  zcashd_hostname: System.get_env("ZCASHD_HOSTNAME", "localhost"),
+  zcashd_hostname: System.get_env("ZCASHD_HOSTNAME", "127.0.0.1"),
   zcashd_port: System.get_env("ZCASHD_PORT", "8232"),
-  zcash_network: System.get_env("ZCASH_NETWORK", "mainnet"),
+  zcash_network: System.get_env("ZCASH_NETWORK", "testnet"),
   zcashd_username:
     (fn ->
-       cookie_path = System.get_env("ZCASH_RPC_COOKIE_FILE", "/var/lib/zebrad-rpc/.cookie")
+      cookie_path = System.get_env("ZCASH_RPC_COOKIE_FILE")
 
-       case File.read(cookie_path) do
-         {:ok, content} ->
-           case String.trim(content) |> String.split(":", parts: 2) do
-             ["__cookie__", _] -> "__cookie__"
-             _ -> "__cookie__"
-           end
+      if cookie_path in [nil, ""] do
+        ""
+      else
+        case File.read(cookie_path) do
+          {:ok, content} ->
+            case String.trim(content) |> String.split(":", parts: 2) do
+              ["__cookie__", _] -> "__cookie__"
+              [user, _] -> user
+              _ -> ""
+            end
 
-         _ ->
-           # No Logger here — config runs before the app logger is ready
-           "__cookie__"
-       end
-     end).(),
+          _ ->
+            ""
+        end
+      end
+    end).(),
   zcashd_password:
     (fn ->
-       cookie_path = System.get_env("ZCASH_RPC_COOKIE_FILE", "/var/lib/zebrad-rpc/.cookie")
+      cookie_path = System.get_env("ZCASH_RPC_COOKIE_FILE")
 
-       case File.read(cookie_path) do
-         {:ok, content} ->
-           case String.trim(content) |> String.split(":", parts: 2) do
-             ["__cookie__", pass] -> pass
-             _ -> ""
-           end
+      if cookie_path in [nil, ""] do
+        ""
+      else
+        case File.read(cookie_path) do
+          {:ok, content} ->
+            case String.trim(content) |> String.split(":", parts: 2) do
+              ["__cookie__", pass] -> pass
+              [_, pass] -> pass
+              _ -> ""
+            end
 
-         _ ->
-           ""
-       end
-     end).() 
+          _ ->
+            ""
+        end
+      end
+    end).()

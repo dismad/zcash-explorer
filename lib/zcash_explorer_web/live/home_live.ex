@@ -57,14 +57,13 @@ defmodule ZcashExplorerWeb.HomeLive do
 
         <!-- ===== BOTTOM NAVIGATION (now visible on ALL screen sizes) ===== -->
         <nav class="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 z-50 shadow-lg">
-          <div class="max-w-7xl mx-auto grid grid-cols-5 text-xs">
+          <div class="max-w-7xl mx-auto grid grid-cols-6 text-xs">
             <a href="/mempool" class="flex flex-col items-center py-3 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
               </svg>
               <span class="font-medium">Mempool</span>
             </a>
-
             <!-- BLOCKS LINK WITH CUBE ICON -->
             <a href="/blocks" class="flex flex-col items-center py-3 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-blue-600 dark:text-blue-400">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -74,7 +73,6 @@ defmodule ZcashExplorerWeb.HomeLive do
               </svg>
               <span class="font-medium">Blocks</span>
             </a>
-
             <!-- NEW: TRANSACTIONS LINK (right next to Blocks) -->
             <a href="/transactions" class="flex flex-col items-center py-3 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -82,14 +80,19 @@ defmodule ZcashExplorerWeb.HomeLive do
               </svg>
               <span class="font-medium">Txs</span>
             </a>
-
             <a href="/blockchain-info" class="flex flex-col items-center py-3 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 4.01V8" />
               </svg>
               <span class="font-medium">Node</span>
             </a>
-
+            <!-- Crosslink -->
+            <a href="/live/crosslink" class="flex flex-col items-center py-3 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-emerald-600 dark:text-emerald-400">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+              </svg>
+              <span class="font-medium">Crosslink</span>
+            </a>
             <a href="/dev/rpc" class="flex flex-col items-center py-3 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M8 9l3 3-3 3m5 0h3M4 12a8 8 0 018-8 8 8 0 01-8 8z" />

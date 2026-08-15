@@ -7,9 +7,17 @@ defmodule ZcashExplorerWeb.BlockLive do
     network = Application.get_env(:zcash_explorer, Zcashex, [])[:zcash_network] || "mainnet"
     standalone = Map.get(session, "standalone", true)
 
-    case Zcashex.getblock(hash, 2) do
+        case Zcashex.getblock(hash, 2) do
       {:ok, block_map} ->
         block = Zcashex.Block.from_map(block_map)
+
+        # Prefer the canonical hash from the block for finality RPC
+        block_hash =
+          cond do
+            is_binary(block && block.hash) -> block.hash
+            is_binary(block_map["hash"]) -> block_map["hash"]
+            true -> hash
+          end
 
         block_txs =
           if block && block.tx do
@@ -37,23 +45,20 @@ defmodule ZcashExplorerWeb.BlockLive do
 
         full_cache = Map.merge(block_txs, prev_txs)
 
+        finality =
+          case ZcashExplorer.Crosslink.block_finality(block_hash) do
+            {:ok, status} -> status
+            _ -> nil
+          end
+
         {:ok,
          assign(socket,
            block: block,
-           hash: hash,
+           hash: block_hash,
            zcash_network: network,
            standalone: standalone,
-           full_cache: full_cache
-         )}
-
-      _ ->
-        {:ok,
-         assign(socket,
-           block: nil,
-           hash: hash,
-           zcash_network: network,
-           standalone: standalone,
-           full_cache: %{}
+           full_cache: full_cache,
+           finality: finality
          )}
     end
   end
@@ -162,6 +167,21 @@ defmodule ZcashExplorerWeb.BlockLive do
                 <div class="flex justify-between gap-2">
                   <dt class="text-gray-500 shrink-0">Confirmations</dt>
                   <dd><%= @block && @block.confirmations %></dd>
+                </div>
+                <div class="flex justify-between gap-2">
+                  <dt class="text-gray-500 shrink-0">Finality</dt>
+                  <dd>
+                    <%= case @finality do %>
+                      <% "Finalized" -> %>
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300">Finalized</span>
+                      <% "NotYetFinalized" -> %>
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">Not yet</span>
+                      <% status when is_binary(status) -> %>
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300"><%= status %></span>
+                      <% _ -> %>
+                        <span class="text-gray-400 text-xs">—</span>
+                    <% end %>
+                  </dd>
                 </div>
                 <div class="flex justify-between gap-2">
                   <dt class="text-gray-500 shrink-0">Bits</dt>

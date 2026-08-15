@@ -12,6 +12,12 @@ defmodule ZcashExplorerWeb.TransactionLive do
         tx = Zcashex.Transaction.from_map(tx_map)
         full_cache = fetch_prev_txs(tx)
 
+        finality =
+          case ZcashExplorer.Crosslink.tx_finality(txid) do
+            {:ok, status} -> status
+            _ -> nil
+          end
+
         {:ok,
          assign(socket,
            tx: tx,
@@ -19,7 +25,8 @@ defmodule ZcashExplorerWeb.TransactionLive do
            txid: txid,
            zcash_network: network,
            standalone: standalone,
-           full_cache: full_cache
+           full_cache: full_cache,
+           finality: finality
          )}
 
       _ ->
@@ -30,7 +37,8 @@ defmodule ZcashExplorerWeb.TransactionLive do
            txid: txid,
            zcash_network: network,
            standalone: standalone,
-           full_cache: %{}
+           full_cache: %{},
+           finality: nil
          )}
     end
   end
@@ -77,6 +85,21 @@ defmodule ZcashExplorerWeb.TransactionLive do
                 <div class="flex justify-between">
                   <dt class="text-gray-500">Confirmations</dt>
                   <dd class="font-semibold"><%= @tx && @tx.confirmations || 0 %></dd>
+                </div>
+                <div class="flex justify-between items-center">
+                  <dt class="text-gray-500">Finality</dt>
+                  <dd>
+                    <%= case @finality do %>
+                      <% "Finalized" -> %>
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300">Finalized</span>
+                      <% "NotYetFinalized" -> %>
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">Not yet</span>
+                      <% status when is_binary(status) -> %>
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300"><%= status %></span>
+                      <% _ -> %>
+                        <span class="text-gray-400 text-xs">—</span>
+                    <% end %>
+                  </dd>
                 </div>
                 <div class="flex justify-between">
                   <dt class="text-gray-500">Block Height</dt>
@@ -265,6 +288,7 @@ defmodule ZcashExplorerWeb.TransactionLive do
 
   defp is_coinbase_tx?(tx) do
     vin = Map.get(tx, :vin) || Map.get(tx, "vin") || []
+
     match?([%{coinbase: c} | _] when c != nil, vin) or
       match?([%{"coinbase" => c} | _] when c != nil, vin)
   end

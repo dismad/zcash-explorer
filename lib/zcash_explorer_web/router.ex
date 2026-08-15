@@ -46,6 +46,9 @@ defmodule ZcashExplorerWeb.Router do
     live "/live/ironwood_pool", IronwoodPoolLive
     live "/dev/rpc", RpcDiscoverLive
 
+    # Crosslink
+    live "/live/crosslink", CrosslinkLive
+    
     # Search and Address pages
     get "/search", SearchController, :search
     live "/address/:address", AddressLive

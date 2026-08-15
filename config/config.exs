@@ -11,18 +11,53 @@ config :zcash_explorer,
   ecto_repos: [ZcashExplorer.Repo]
 
 # Configures the endpoint
-config :zcash_explorer, ZcashExplorerWeb.Endpoint,
-  url: [host: "localhost"],
-  secret_key_base: System.get_env("SECRET_KEY_BASE") ||
-                   raise("""
-                   environment variable SECRET_KEY_BASE is missing.
-                   You can generate one by calling: mix phx.gen.secret
-                   """),
-  render_errors: [view: ZcashExplorerWeb.ErrorView, accepts: ~w(html json), layout: false],
-  pubsub_server: ZcashExplorer.PubSub,
-  live_view: [signing_salt: System.get_env("SIGNING_SALT") ||
-              raise("environment variable SIGNING_SALT is missing.")]
+# config/dev.exs
 
+config :zcash_explorer, Zcashex,
+  zcashd_hostname: System.get_env("ZCASHD_HOSTNAME", "127.0.0.1"),
+  zcashd_port: System.get_env("ZCASHD_PORT", "8232"),
+  zcash_network: System.get_env("ZCASH_NETWORK", "testnet"),
+  zcashd_username:
+    (fn ->
+       cookie_path = System.get_env("ZCASH_RPC_COOKIE_FILE")
+
+       if cookie_path in [nil, ""] do
+         # Cookie auth disabled (common on crosslink feature nets)
+         ""
+       else
+         case File.read(cookie_path) do
+           {:ok, content} ->
+             case String.trim(content) |> String.split(":", parts: 2) do
+               ["__cookie__", _] -> "__cookie__"
+               [user, _] -> user
+               _ -> ""
+             end
+
+           _ ->
+             ""
+         end
+       end
+     end).(),
+  zcashd_password:
+    (fn ->
+       cookie_path = System.get_env("ZCASH_RPC_COOKIE_FILE")
+
+       if cookie_path in [nil, ""] do
+         ""
+       else
+         case File.read(cookie_path) do
+           {:ok, content} ->
+             case String.trim(content) |> String.split(":", parts: 2) do
+               ["__cookie__", pass] -> pass
+               [_, pass] -> pass
+               _ -> ""
+             end
+
+           _ ->
+             ""
+         end
+       end
+     end).()
 # Configures Elixir's Logger
 config :logger, :console,
   format: "$time $metadata[$level] $message\n",
