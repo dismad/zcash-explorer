@@ -36,8 +36,8 @@ defmodule ZcashExplorerWeb.CrosslinkLive do
   end
 
   def handle_event("toggle_roster", _, socket) do
-  {:noreply, assign(socket, show_roster: !socket.assigns.show_roster)}
-end
+    {:noreply, assign(socket, show_roster: !socket.assigns.show_roster)}
+  end
 
   def handle_event("toggle_positions", _, socket) do
     {:noreply, assign(socket, show_positions: !socket.assigns.show_positions)}
@@ -128,7 +128,6 @@ end
       pos_height: pos_height,
       finalizer_count: finalizer_count,
       staking_day: staking_day_info(height),
-      show_roster: false,   # close by default
       roster: roster,
       total_stake: Enum.reduce(roster, 0.0, fn e, acc -> acc + e.stake end),
       orchard: orchard,
@@ -263,6 +262,38 @@ end
 
   defp short_key(key), do: key
 
+  # uaMadness-style fingerprint: char frequencies → sorted rainbow bars
+  defp hex_fingerprint(key) when is_binary(key) do
+    freq =
+      key
+      |> String.downcase()
+      |> String.graphemes()
+      |> Enum.frequencies()
+
+    chars = Enum.map(?0..?9, &<<&1>>) ++ Enum.map(?a..?f, &<<&1>>)
+
+    max_count =
+      freq
+      |> Map.values()
+      |> Enum.max(fn -> 1 end)
+
+    Enum.map(chars, fn c ->
+      count = Map.get(freq, c, 0)
+      pct = if max_count > 0, do: count / max_count * 100, else: 0
+      hue = if max_count > 1, do: (count - 1) / (max_count - 1) * 300, else: 180
+
+      %{
+        char: c,
+        count: count,
+        pct: pct,
+        color: "hsl(#{Float.round(hue * 1.0, 1)}, 85%, 55%)"
+      }
+    end)
+    |> Enum.filter(&(&1.count > 0))
+  end
+
+  defp hex_fingerprint(_), do: []
+
   defp liveness_dot(nil), do: "bg-gray-400"
 
   defp liveness_dot(status) when is_map(status) do
@@ -339,12 +370,12 @@ end
             <div class="rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4">
               <div class="text-xs uppercase tracking-wider text-gray-500 dark:text-gray-400">Finalized Tip</div>
               <div class="mt-2 text-2xl font-bold tabular-nums">
-                <%= if @data.tip do %>
+                <%= if @data.tip && @data.tip.hash do %>
                   <a href={"/blocks/#{@data.tip.hash}"} class="text-blue-600 dark:text-blue-400 hover:underline">
                     <%= @data.tip.height %>
                   </a>
                 <% else %>
-                  —
+                  <%= if @data.tip, do: @data.tip.height, else: "—" %>
                 <% end %>
               </div>
               <%= if @data.lag do %>
@@ -354,7 +385,6 @@ end
               <% end %>
             </div>
 
-            <!-- Staking Day with progress bar -->
             <div class="rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4">
               <div class="text-xs uppercase tracking-wider text-gray-500 dark:text-gray-400">Staking Day</div>
               <%= if @data.staking_day do %>
@@ -398,7 +428,7 @@ end
                 <div class="flex justify-between">
                   <dt class="text-gray-500 dark:text-gray-400">PoW Finalized</dt>
                   <dd class="font-medium tabular-nums text-right">
-                    <%= if @data.tip do %>
+                    <%= if @data.tip && @data.tip.hash do %>
                       <a href={"/blocks/#{@data.tip.hash}"} class="text-blue-600 dark:text-blue-400 hover:underline">
                         <%= @data.tip.height %>
                       </a>
@@ -408,7 +438,7 @@ end
                         </span>
                       <% end %>
                     <% else %>
-                      —
+                      <%= if @data.tip, do: @data.tip.height, else: "—" %>
                     <% end %>
                   </dd>
                 </div>
@@ -448,7 +478,7 @@ end
             </div>
           </div>
 
-                    <!-- Finalizer detail (collapsible) -->
+          <!-- Finalizer detail -->
           <%= if @selected_finalizer do %>
             <% status = selected_status(@data, @selected_finalizer) %>
             <div class="rounded-xl shadow-sm border border-emerald-300 dark:border-emerald-700 bg-white dark:bg-gray-800">
@@ -456,19 +486,38 @@ end
                 phx-click="clear_finalizer"
                 class="w-full px-5 py-4 flex items-center justify-between text-left hover:bg-gray-50 dark:hover:bg-gray-700/40 transition"
               >
-                <div class="min-w-0">
-                  <span class="font-semibold">Finalizer Detail</span>
-                  <span class="ml-2 font-mono text-xs text-gray-500 dark:text-gray-400 truncate">
-                    <%= short_key(@selected_finalizer) %>
-                  </span>
+                <div class="min-w-0 flex items-center gap-3">
+                  <div class="flex items-end gap-px shrink-0" style="height: 28px;">
+                    <%= for bar <- hex_fingerprint(@selected_finalizer) do %>
+                      <div
+                        style={"width: 5px; height: #{max(round(bar.pct / 100 * 28), 3)}px; background-color: #{bar.color}; border-radius: 2px 2px 0 0;"}
+                      ></div>
+                    <% end %>
+                  </div>
+                  <div class="min-w-0">
+                    <span class="font-semibold">Finalizer Detail</span>
+                    <span class="ml-2 font-mono text-xs text-gray-500 dark:text-gray-400">
+                      <%= short_key(@selected_finalizer) %>
+                    </span>
+                  </div>
                 </div>
                 <span class="text-gray-400 text-sm shrink-0">Close ✕</span>
               </button>
 
               <div class="px-5 pb-5">
-                <div class="font-mono text-xs break-all text-gray-600 dark:text-gray-300 mb-4">
+                <div class="font-mono text-xs break-all text-gray-600 dark:text-gray-300 mb-3">
                   <%= @selected_finalizer %>
                 </div>
+
+                <div class="flex items-end gap-0.5 mb-4" style="height: 48px;">
+                  <%= for bar <- hex_fingerprint(@selected_finalizer) do %>
+                    <div
+                      style={"width: 8px; height: #{max(round(bar.pct / 100 * 48), 4)}px; background-color: #{bar.color}; border-radius: 2px 2px 0 0;"}
+                      title={"#{bar.char}: #{bar.count}"}
+                    ></div>
+                  <% end %>
+                </div>
+
                 <dl class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
                   <div class="flex justify-between sm:block">
                     <dt class="text-gray-500 dark:text-gray-400">Highest round vote</dt>
@@ -497,7 +546,7 @@ end
             </div>
           <% end %>
 
-                    <!-- Roster (collapsible) -->
+          <!-- Roster (collapsible) -->
           <div class="rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden">
             <button
               phx-click="toggle_roster"
@@ -522,10 +571,10 @@ end
                   <table class="w-full text-sm">
                     <thead class="bg-gray-50 dark:bg-gray-900/50 text-xs uppercase text-gray-500">
                       <tr>
-                        <th class="text-left px-5 py-3 font-medium">#</th>
-                        <th class="text-left px-5 py-3 font-medium">Finalizer</th>
-                        <th class="text-right px-5 py-3 font-medium">Stake (cTAZ)</th>
-                        <th class="text-right px-5 py-3 font-medium w-32">Share</th>
+                        <th class="text-left px-3 sm:px-5 py-3 font-medium w-14">#</th>
+                        <th class="text-left px-3 sm:px-5 py-3 font-medium">Finalizer</th>
+                        <th class="text-right px-3 sm:px-5 py-3 font-medium whitespace-nowrap">Stake (cTAZ)</th>
+                        <th class="text-right px-3 sm:px-5 py-3 font-medium w-28 sm:w-36">Share</th>
                       </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
@@ -536,19 +585,37 @@ end
                           phx-value-key={entry.key}
                           class={"cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/40 " <> if(@selected_finalizer == entry.key, do: "bg-emerald-50 dark:bg-emerald-900/20", else: "")}
                         >
-                          <td class="px-5 py-2.5 text-gray-400 tabular-nums">
-                            <span class={"inline-block w-2 h-2 rounded-full mr-2 " <> liveness_dot(status)}></span>
+                          <td class="px-3 sm:px-5 py-3 text-gray-400 tabular-nums align-middle whitespace-nowrap">
+                            <span class={"inline-block w-2 h-2 rounded-full mr-1.5 " <> liveness_dot(status)}></span>
                             <%= idx %>
                           </td>
-                          <td class="px-5 py-2.5 font-mono text-xs" title={entry.key}>
-                            <%= short_key(entry.key) %>
+
+                          <td class="px-3 sm:px-5 py-3 align-middle">
+                            <div class="flex items-center gap-3 min-w-0">
+                              <div
+                                class="flex items-end gap-px shrink-0"
+                                style="height: 28px;"
+                                title={"fingerprint of #{entry.key}"}
+                              >
+                                <%= for bar <- hex_fingerprint(entry.key) do %>
+                                  <div
+                                    style={"width: 5px; height: #{max(round(bar.pct / 100 * 28), 3)}px; background-color: #{bar.color}; border-radius: 2px 2px 0 0;"}
+                                    title={"#{bar.char}: #{bar.count}"}
+                                  ></div>
+                                <% end %>
+                              </div>
+                              <span class="font-mono text-[11px] sm:text-xs text-gray-800 dark:text-gray-200 break-all leading-snug flex-1 text-center">
+                                <%= entry.key %>
+                              </span>
+                            </div>
                           </td>
-                          <td class="px-5 py-2.5 text-right tabular-nums font-medium">
+                          <td class="px-3 sm:px-5 py-3 text-right tabular-nums font-medium align-middle whitespace-nowrap">
                             <%= format_stake(entry.stake) %>
                           </td>
-                          <td class="px-5 py-2.5 text-right">
+
+                          <td class="px-3 sm:px-5 py-3 align-middle">
                             <div class="flex items-center justify-end gap-2">
-                              <div class="w-16 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                              <div class="w-14 sm:w-20 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
                                 <div
                                   class="h-full bg-blue-500 rounded-full"
                                   style={"width: #{if @data.total_stake > 0, do: entry.stake / @data.total_stake * 100, else: 0}%"}
