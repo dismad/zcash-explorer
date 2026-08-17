@@ -50,8 +50,8 @@ defmodule ZcashExplorer.MixProject do
       {:cachex, "~> 3.3"},
       {:phoenix_live_view, "~> 0.20"},
       {:floki, ">= 0.27.0", only: :test},
-      # Ironwood support lives in this fork
-      {:zcashex, github: "dismad/zcashex", branch: "main"},
+      # ZSA support lives in this fork
+      {:zcashex, github: "dismad/zcashex", branch: "zsa"},
       {:timex, "~> 3.0"},
       {:sizeable, "~> 1.0"},
       {:eqrcode, "~> 0.1.8"},

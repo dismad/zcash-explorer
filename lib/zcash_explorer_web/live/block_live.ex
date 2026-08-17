@@ -226,9 +226,12 @@ defmodule ZcashExplorerWeb.BlockLive do
                       <td class="px-2 sm:px-4 py-2 sm:py-4">
                         <div class="flex items-center gap-1 sm:gap-1.5 flex-wrap">
                           <%= tx_type(full) %>
-                          <%= for badge <- pool_badges(full) do %>
-                            <%= badge %>
-                          <% end %>
+			<%= for badge <- pool_badges(full) do %>
+			  <%= badge %>
+			<% end %>
+			<%= for badge <- zsa_badges(full) do %>
+			  <%= badge %>
+			<% end %>
                         </div>
                       </td>
                     </tr>

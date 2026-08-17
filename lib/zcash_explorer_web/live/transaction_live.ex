@@ -116,7 +116,7 @@ defmodule ZcashExplorerWeb.TransactionLive do
                 </div>
               </dl>
             </div>
-            <!-- TX Type + Pools + Turnstile -->
+            <!-- TX Type + Pools + ZSA -->
             <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
               <div class="flex flex-col gap-3">
                 <div class="flex items-center gap-3">
@@ -128,7 +128,21 @@ defmodule ZcashExplorerWeb.TransactionLive do
                   <%= for badge <- pool_badges(@tx) do %>
                     <%= badge %>
                   <% end %>
+                  <%= for badge <- zsa_badges(@tx_raw || @tx) do %>
+                    <%= badge %>
+                  <% end %>
                 </div>
+                <% zsa = ZcashExplorer.ZsaDecoder.summarize(@tx_raw || @tx) %>
+                <%= if zsa.likely_issuance do %>
+                  <div class="pt-2 border-t border-gray-100 dark:border-gray-700">
+                    <div class="flex justify-between items-start gap-2">
+                      <span class="text-gray-500 text-sm shrink-0">Asset Desc Hash</span>
+                      <span class="font-mono text-xs break-all text-right text-indigo-700 dark:text-indigo-300">
+                        <%= List.first(zsa.asset_desc_hashes) || "—" %>
+                      </span>
+                    </div>
+                  </div>
+                <% end %>
                 <%= if @tx && turnstile?(@tx) do %>
                   <div class="pt-2 border-t border-gray-100 dark:border-gray-700">
                     <div class="flex justify-between items-center gap-2">
@@ -265,6 +279,7 @@ defmodule ZcashExplorerWeb.TransactionLive do
 
   defp is_coinbase_tx?(tx) do
     vin = Map.get(tx, :vin) || Map.get(tx, "vin") || []
+
     match?([%{coinbase: c} | _] when c != nil, vin) or
       match?([%{"coinbase" => c} | _] when c != nil, vin)
   end

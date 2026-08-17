@@ -46,6 +46,57 @@ defmodule ZcashExplorerWeb.TransactionHelper do
   def tx_type(tx) when is_map(tx), do: badge(classify(tx))
   def tx_type(_), do: badge("unknown")
 
+  # ---------------------------------------------------------------------------
+  # ZSA badges (safe for both struct atom keys and raw RPC string keys)
+  # ---------------------------------------------------------------------------
+
+  def zsa_badges(nil), do: []
+
+  def zsa_badges(tx) when is_map(tx) do
+  summary = ZcashExplorer.ZsaDecoder.summarize(tx)
+
+  []
+  |> maybe_zsa_html(summary.is_v6, "V6", "bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-200")
+  |> maybe_zsa_html(summary.likely_issuance, "Issuance", "bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-200")
+  |> maybe_zsa_html(
+    truthy?(Map.get(tx, :burnexists) || Map.get(tx, "burnexists")),
+    "Burn",
+    "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200"
+  )
+  |> maybe_zsa_html(
+    summary.likely_zsa or zsa_enabled?(tx),
+    "ZSA",
+    "bg-indigo-100 text-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-200"
+  )
+  |> Enum.reverse()
+end
+
+
+  defp maybe_zsa_html(list, true, label, classes) do
+    [
+      raw(
+        ~s(<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium #{classes}">#{label}</span>)
+      )
+      | list
+    ]
+  end
+
+  defp maybe_zsa_html(list, _, _, _), do: list
+
+  defp zsa_enabled?(tx) when is_map(tx) do
+    orchard = Map.get(tx, :orchard) || Map.get(tx, "orchard") || %{}
+    flags = Map.get(orchard, :flags) || Map.get(orchard, "flags") || %{}
+    truthy?(Map.get(flags, :enableZSA) || Map.get(flags, "enableZSA"))
+  end
+
+  defp zsa_enabled?(_), do: false
+
+  defp truthy?(v), do: v in [true, "true", 1]
+
+  # ---------------------------------------------------------------------------
+  # Pools
+  # ---------------------------------------------------------------------------
+
   def pool_list(tx) when is_map(tx) do
     vin = Map.get(tx, "vin") || Map.get(tx, :vin) || []
     vjoinsplit = Map.get(tx, "vjoinsplit") || Map.get(tx, :vjoinsplit) || []
@@ -92,8 +143,12 @@ defmodule ZcashExplorerWeb.TransactionHelper do
   @doc "True when 2+ shielded pools are involved (Sapling/Orchard/Ironwood/Sprout)."
   def turnstile?(tx) when is_map(tx) do
     case Map.get(tx, "turnstile") do
-      true -> true
-      false -> false
+      true ->
+        true
+
+      false ->
+        false
+
       _ ->
         pools = Map.get(tx, "pools") || Map.get(tx, :pools) || pool_list(tx)
         shielded = Enum.count(pools, &(&1 in @pure_shielded_pools))
@@ -171,6 +226,10 @@ defmodule ZcashExplorerWeb.TransactionHelper do
   end
 
   def pool_badge(_), do: raw("")
+
+  # ---------------------------------------------------------------------------
+  # Private helpers
+  # ---------------------------------------------------------------------------
 
   defp detect_type(tx) do
     vin = Map.get(tx, "vin") || Map.get(tx, :vin) || []
