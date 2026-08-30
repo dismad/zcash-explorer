@@ -143,7 +143,7 @@ mix deps.get
 
 cd assets
 npm install
-NODE_OPTIONS=--openssl-legacy-provider npx webpack --mode development
+npx webpack --mode development
 cd ..
 ```
 
