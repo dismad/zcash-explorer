@@ -61,20 +61,14 @@ asdf plugin add erlang
 asdf plugin add elixir
 asdf plugin add nodejs
 
-asdf install erlang 27.3.3
-asdf install elixir 1.18.3-otp-27
-asdf install nodejs 14.21.3
+git clone https://github.com/dismad/zcash-explorer.git
+cd zcash-explorer
+asdf install
 
-asdf global erlang 27.3.3
-asdf global elixir 1.18.3-otp-27
-asdf global nodejs 14.21.3
-```
-
-Check:
-
-```bash
-elixir -v   # Elixir 1.18.x, OTP 27
-node -v     # v14.x
+elixir -v
+# expect: Elixir 1.18.3 (compiled with Erlang/OTP 27)
+cat "$(asdf where erlang)/releases/27/OTP_VERSION"
+# expect: 27.3.3
 ```
 
 ---
