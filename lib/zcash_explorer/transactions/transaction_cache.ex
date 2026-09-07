@@ -58,6 +58,7 @@ defmodule ZcashExplorer.Transactions.TransactionWarmer do
 
           turnstile? = ZcashExplorerWeb.TransactionHelper.turnstile?(z)
           turnstile_zat = ZcashExplorerWeb.TransactionHelper.turnstile_amount_zats(z)
+          ironwood_actions = ZcashExplorerWeb.TransactionHelper.ironwood_action_count(z)
 
           %{
             "txid" => Map.get(z, :txid),
@@ -74,7 +75,8 @@ defmodule ZcashExplorer.Transactions.TransactionWarmer do
             "is_coinbase" => coinbase?,
             "turnstile" => turnstile?,
             "turnstile_zat" => turnstile_zat,
-            "turnstile_zec" => turnstile_zat / 100_000_000.0
+            "turnstile_zec" => turnstile_zat / 100_000_000.0,
+            "ironwood_actions" => ironwood_actions
           }
         end)
         |> handle_result()

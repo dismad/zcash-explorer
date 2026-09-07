@@ -216,12 +216,20 @@
                 Orchard Action transfers
                 </dt>
                 <dd class="mt-1 text-sm text-gray-900 dark:text-gray-50">
-
                   <span class="flex-1 w-0 break-all">
-                   <%= orchard_actions(@tx) %>
+                   <%= ZcashExplorerWeb.TransactionHelper.orchard_action_count(@tx) %>
                   </span>
+                </dd>
+              </div>
 
-
+              <div class="sm:col-span-1">
+                <dt class="text-sm font-medium text-gray-500">
+                Ironwood Actions
+                </dt>
+                <dd class="mt-1 text-sm text-gray-900 dark:text-gray-50">
+                  <span class="flex-1 w-0 break-all">
+                   <%= ZcashExplorerWeb.TransactionHelper.ironwood_action_count(@tx) %>
+                  </span>
                 </dd>
               </div>
             </dl>

@@ -195,6 +195,7 @@ defmodule ZcashExplorerWeb.BlockLive do
                     <th class="px-2 sm:px-4 py-2 sm:py-3 text-right">Public Output</th>
                     <th class="px-2 sm:px-4 py-2 sm:py-3 text-right">Δ Transparent</th>
                     <th class="px-2 sm:px-4 py-2 sm:py-3 text-right">Turnstile (ZEC)</th>
+                    <th class="px-2 sm:px-4 py-2 sm:py-3 text-right">Ironwood Actions</th>
                     <th class="px-2 sm:px-4 py-2 sm:py-3 text-left">TX Type</th>
                   </tr>
                 </thead>
@@ -222,6 +223,9 @@ defmodule ZcashExplorerWeb.BlockLive do
                       </td>
                       <td class="px-2 sm:px-4 py-2 sm:py-4 text-right whitespace-nowrap font-mono">
                         <%= format_turnstile(full) %>
+                      </td>
+                      <td class="px-2 sm:px-4 py-2 sm:py-4 text-right whitespace-nowrap font-mono">
+                        <%= format_ironwood_actions(full) %>
                       </td>
                       <td class="px-2 sm:px-4 py-2 sm:py-4">
                         <div class="flex items-center gap-1 sm:gap-1.5 flex-wrap">

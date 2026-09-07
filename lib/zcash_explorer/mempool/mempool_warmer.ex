@@ -26,6 +26,7 @@ defmodule ZcashExplorer.Mempool.MempoolWarmer do
 
                 turnstile? = turnstile?(tx)
                 turnstile_zat = turnstile_amount_zats(tx)
+                ironwood_actions = ironwood_action_count(tx)
 
                 %{
                   "txid" => txid,
@@ -36,7 +37,8 @@ defmodule ZcashExplorer.Mempool.MempoolWarmer do
                   "is_coinbase" => coinbase?,
                   "turnstile" => turnstile?,
                   "turnstile_zat" => turnstile_zat,
-                  "turnstile_zec" => turnstile_zat / 100_000_000.0
+                  "turnstile_zec" => turnstile_zat / 100_000_000.0,
+                  "ironwood_actions" => ironwood_actions
                 }
 
               {:error, reason} ->
@@ -52,7 +54,8 @@ defmodule ZcashExplorer.Mempool.MempoolWarmer do
                   "is_coinbase" => false,
                   "turnstile" => false,
                   "turnstile_zat" => 0,
-                  "turnstile_zec" => 0.0
+                  "turnstile_zec" => 0.0,
+                  "ironwood_actions" => 0
                 }
             end
           end)

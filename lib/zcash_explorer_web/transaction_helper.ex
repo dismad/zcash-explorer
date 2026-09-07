@@ -123,6 +123,37 @@ defmodule ZcashExplorerWeb.TransactionHelper do
     turnstile_amount_zats(tx) / 100_000_000.0
   end
 
+  def ironwood_action_count(tx) when is_map(tx) do
+    case Map.get(tx, "ironwood_actions") || Map.get(tx, :ironwood_actions) do
+      n when is_integer(n) and n >= 0 ->
+        n
+
+      _ ->
+        count_pool_actions(pool_field(tx, :ironwood))
+    end
+  end
+
+  def ironwood_action_count(_), do: 0
+
+  def orchard_action_count(tx) when is_map(tx) do
+    case Map.get(tx, "orchard_actions") || Map.get(tx, :orchard_actions) do
+      n when is_integer(n) and n >= 0 ->
+        n
+
+      _ ->
+        count_pool_actions(pool_field(tx, :orchard))
+    end
+  end
+
+  def orchard_action_count(_), do: 0
+
+  def format_ironwood_actions(tx) do
+    case ironwood_action_count(tx) do
+      n when is_integer(n) and n > 0 -> Integer.to_string(n)
+      _ -> "—"
+    end
+  end
+
   def pool_flow_zec(tx) when is_map(tx) do
     %{
       sapling: sapling_zat(tx) / 100_000_000.0,
@@ -245,6 +276,19 @@ defmodule ZcashExplorerWeb.TransactionHelper do
 
   defp pool_field(tx, key) when is_atom(key) do
     Map.get(tx, key) || Map.get(tx, Atom.to_string(key))
+  end
+
+  defp count_pool_actions(nil), do: 0
+
+  defp count_pool_actions(pool) when is_map(pool) do
+    n = Map.get(pool, :nActions) || Map.get(pool, "nActions")
+    actions = Map.get(pool, :actions) || Map.get(pool, "actions")
+
+    cond do
+      is_integer(n) and n >= 0 -> n
+      is_list(actions) -> length(actions)
+      true -> 0
+    end
   end
 
   defp get_pool_zat(nil), do: 0

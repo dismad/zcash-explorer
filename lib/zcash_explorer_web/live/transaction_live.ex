@@ -212,26 +212,6 @@ defmodule ZcashExplorerWeb.TransactionLive do
     """
   end
 
-  defp orchard_action_count(nil), do: 0
-
-  defp orchard_action_count(tx) do
-    case Map.get(tx, :orchard) || Map.get(tx, "orchard") do
-      %{actions: actions} when is_list(actions) -> length(actions)
-      %{"actions" => actions} when is_list(actions) -> length(actions)
-      _ -> 0
-    end
-  end
-
-  defp ironwood_action_count(nil), do: 0
-
-  defp ironwood_action_count(tx) do
-    case Map.get(tx, :ironwood) || Map.get(tx, "ironwood") do
-      %{actions: actions} when is_list(actions) -> length(actions)
-      %{"actions" => actions} when is_list(actions) -> length(actions)
-      _ -> 0
-    end
-  end
-
   defp tx_fee(nil, _), do: 0.0
 
   defp tx_fee(tx, full_cache) do

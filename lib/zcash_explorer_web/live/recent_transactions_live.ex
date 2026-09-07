@@ -94,6 +94,7 @@ defmodule ZcashExplorerWeb.RecentTransactionsLive do
                   <th scope="col" class="px-6 py-3 text-right">Public Output (<%= if @chain == "main", do: "ZEC", else: "TAZ" %>)</th>
                   <th scope="col" class="px-6 py-3 text-right">Δ Transparent</th>
                   <th scope="col" class="px-4 py-3 text-right">Turnstile (ZEC)</th>
+                  <th scope="col" class="px-4 py-3 text-right">Ironwood Actions</th>
                   <th scope="col" class="px-4 py-3">TX Type</th>
                 </tr>
               </thead>
@@ -120,6 +121,9 @@ defmodule ZcashExplorerWeb.RecentTransactionsLive do
                     </td>
                     <td class="px-4 py-4 whitespace-nowrap text-sm font-mono text-right">
                       <%= format_turnstile(tx) %>
+                    </td>
+                    <td class="px-4 py-4 whitespace-nowrap text-sm font-mono text-right">
+                      <%= format_ironwood_actions(tx) %>
                     </td>
                     <td class="px-4 py-4">
                       <div class="flex items-center gap-1.5 flex-wrap">

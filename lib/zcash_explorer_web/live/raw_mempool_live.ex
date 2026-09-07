@@ -76,6 +76,7 @@ defmodule ZcashExplorerWeb.RawMempoolLive do
                   <th scope="col" class="px-4 py-3">Fee (ZEC)</th>
                   <th scope="col" class="px-4 py-3">Size</th>
                   <th scope="col" class="px-4 py-3 text-right">Turnstile (ZEC)</th>
+                  <th scope="col" class="px-4 py-3 text-right">Ironwood Actions</th>
                   <th scope="col" class="px-4 py-3">TX Type</th>
                 </tr>
               </thead>
@@ -99,6 +100,9 @@ defmodule ZcashExplorerWeb.RawMempoolLive do
                     </td>
                     <td class="px-4 py-4 whitespace-nowrap text-sm font-mono text-right">
                       <%= format_turnstile(tx) %>
+                    </td>
+                    <td class="px-4 py-4 whitespace-nowrap text-sm font-mono text-right">
+                      <%= format_ironwood_actions(tx) %>
                     </td>
                     <td class="px-4 py-4">
                       <div class="flex items-center gap-1.5 flex-wrap">
