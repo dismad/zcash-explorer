@@ -56,13 +56,15 @@ When cookie auth is enabled, point `ZCASH_RPC_COOKIE_FILE` at the cookie path in
 
 | RPC | Purpose |
 |-----|---------|
-| `is_tfl_activated` | TFL on/off |
+| `is_tfl_activated` | PoW bootstrap vs Crosslink activated (v14) |
 | `get_tfl_final_block_height_and_hash` | Finalized tip (height + hash) |
 | `get_tfl_block_finality_from_hash` | Block finality badge |
 | `get_tfl_tx_finality_from_hash` | Tx finality badge |
 | `get_tfl_recency_status` | Finalizer liveness / PoS height |
-| `get_tfl_roster_zec` | Roster + stake |
+| `get_tfl_roster_zec` | Active roster + stake (top 12 on v14 feature net) |
 | `wallet_staking_positions` | Local wallet bonds |
+| `get_wallet_ufvk` | Local wallet UFVK |
+| `wallet_spendable_funds` | Spendable / pending / committed zats |
 | `getblockchaininfo` | Orchard / value pools |
 | `getblockcount` / `getblock` | Heights and block pages |
 
@@ -71,8 +73,11 @@ Helpers live in `lib/zcash_explorer/crosslink.ex`.
 **Notes**
 
 - Tip hashes from Crosslink are returned as **byte arrays**; the explorer normalizes them to display-order hex for `/blocks/<hash>` links.
+- Roster pubkeys from `get_tfl_roster_zec` are raw hex. Recency and `wallet_staking_positions` use `PubKeyID` display order (byte-reversed). The page joins both forms.
+- v14 feature-net parameters: staking period `10368` blocks (~3 days), staking-day window `3456` blocks (~1 day), active roster cap `12`. Commission is 10% of PoS rewards to that active set by weight, 90% to bonds. Bonds outside the active roster do not open a reward bank.
+- Before `is_tfl_activated` the feature net is pure PoW. Finality and the roster stay empty until activation.
 - `my_height` (PoS height) is only set when the node is participating as a finalizer.
-- Staking bonded/unbonded totals are **wallet-local**, not chain-wide.
+- Staking bonded/unbonded totals, UFVK, and spendable funds are **wallet-local**, not chain-wide. This page does not broadcast `wallet_staking_action`.
 - Finality badges are on detail pages only (not the recent-tx list) to avoid RPC storms.
 
 ---

@@ -1,9 +1,30 @@
 defmodule ZcashExplorer.Crosslink do
   @moduledoc """
   Thin wrappers around zebra-crosslink TFL / staking RPCs.
+
+  Constants match ShieldedLabs/crosslink_monolith v14
+  (`librustzcash` `STAKING_PERIOD`, `STAKING_DAY_WINDOW`, `ACTIVE_ROSTER_MAX_N`).
+  Commission split is the v14 feature-net issuance rule: 10% of PoS rewards
+  to active finalizers by weight, 90% to staking bonds.
   """
 
   @default_timeout 12_000
+
+  # v14 feature-net parameters. Block target on the feature net makes the
+  # window ~1 day and the period ~3 days; the chain counts blocks, not wall time.
+  @staking_period 10_368
+  @staking_day_window 3_456
+  @active_roster_max 12
+  @commission_bps 1_000
+
+  def staking_params do
+    %{
+      period: @staking_period,
+      day_window: @staking_day_window,
+      active_roster_max: @active_roster_max,
+      commission_bps: @commission_bps
+    }
+  end
 
   def is_activated do
     case call("is_tfl_activated") do
@@ -46,6 +67,14 @@ defmodule ZcashExplorer.Crosslink do
 
   def staking_positions do
     call("wallet_staking_positions", [], 15_000)
+  end
+
+  def wallet_ufvk do
+    call("get_wallet_ufvk", [], 15_000)
+  end
+
+  def spendable_funds do
+    call("wallet_spendable_funds", [], 15_000)
   end
 
   def staking_totals do
@@ -116,18 +145,16 @@ defmodule ZcashExplorer.Crosslink do
     end
   end
 
-  # --- helpers ---
-
-   # JSON returns hash as a list of 32 integers (internal byte order).
+  # JSON returns block hashes as a list of 32 integers (internal byte order).
   # Reverse before hex-encoding so it matches getblock / explorer URLs.
-  defp normalize_hash(bytes) when is_list(bytes) and length(bytes) == 32 do
+  def normalize_hash(bytes) when is_list(bytes) and length(bytes) == 32 do
     bytes
     |> Enum.reverse()
     |> :binary.list_to_bin()
     |> Base.encode16(case: :lower)
   end
 
-  defp normalize_hash(hash) when is_binary(hash) do
+  def normalize_hash(hash) when is_binary(hash) do
     cond do
       Regex.match?(~r/^[0-9a-fA-F]{64}$/, hash) ->
         String.downcase(hash)
@@ -144,7 +171,27 @@ defmodule ZcashExplorer.Crosslink do
     end
   end
 
-  defp normalize_hash(_), do: nil
+  def normalize_hash(_), do: nil
+
+  # Roster RPCs hex-encode the raw 32-byte key (`serde` hex). Recency and
+  # wallet positions use `PubKeyID`, which reverses those bytes before hex.
+  # Return both so callers can join the two shapes.
+  def pubkey_forms(hex) when is_binary(hex) do
+    cleaned =
+      hex
+      |> String.replace(~r/^0x/i, "")
+      |> String.downcase()
+
+    if Regex.match?(~r/^[0-9a-f]{64}$/, cleaned) do
+      reversed = reverse_pk(cleaned)
+      %{raw: cleaned, display: reversed}
+    else
+      %{raw: cleaned, display: cleaned}
+    end
+  end
+
+  def pubkey_forms(_), do: %{raw: nil, display: nil}
+
   defp call(method, params \\ [], timeout \\ @default_timeout) do
     try do
       GenServer.call(Zcashex, {:call_endpoint, method, params}, timeout)

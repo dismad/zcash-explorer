@@ -2,8 +2,11 @@ defmodule ZcashExplorerWeb.CrosslinkLive do
   use Phoenix.LiveView, layout: false
 
   @refresh_ms 12_000
-  @staking_day_length 150
-  @staking_window 70
+  # crosslink_monolith v14: STAKING_PERIOD / STAKING_DAY_WINDOW / ACTIVE_ROSTER_MAX_N
+  @staking_day_length 10_368
+  @staking_window 3_456
+  @active_roster_max 12
+  @commission_bps 1_000
 
   @impl true
   def mount(_params, _session, socket) do
@@ -21,6 +24,8 @@ defmodule ZcashExplorerWeb.CrosslinkLive do
        roster_view: :table,
        selected_finalizer: nil,
        staking_window: @staking_window,
+       staking_period: @staking_day_length,
+       active_roster_max: @active_roster_max,
        data: load_data()
      )}
   end
@@ -83,6 +88,7 @@ defmodule ZcashExplorerWeb.CrosslinkLive do
           list
           |> Enum.map(&normalize_roster_entry/1)
           |> Enum.sort_by(& &1.stake, :desc)
+          |> annotate_roster()
 
         _ ->
           []
@@ -153,7 +159,20 @@ defmodule ZcashExplorerWeb.CrosslinkLive do
       end
 
     finalizer_status_map = build_finalizer_status_map(recency)
+    roster = align_roster_keys(roster, finalizer_status_map)
+    inactive = inactive_finalizers(roster, recency, finalizer_status_map)
     sunburst = build_sunburst(roster, finalizer_status_map)
+    spendable =
+      case ZcashExplorer.Crosslink.spendable_funds() do
+        {:ok, funds} when is_map(funds) -> funds
+        _ -> nil
+      end
+
+    ufvk =
+      case ZcashExplorer.Crosslink.wallet_ufvk() do
+        {:ok, ufvk} when is_binary(ufvk) -> ufvk
+        _ -> nil
+      end
 
     %{
       activated: ZcashExplorer.Crosslink.is_activated(),
@@ -166,6 +185,11 @@ defmodule ZcashExplorerWeb.CrosslinkLive do
       network_solps: network_solps,
       staking_day: staking_day_info(height),
       roster: roster,
+      inactive: inactive,
+      active_roster_max: @active_roster_max,
+      commission_bps: @commission_bps,
+      spendable: spendable,
+      ufvk: ufvk,
       total_stake: Enum.reduce(roster, 0.0, fn e, acc -> acc + e.stake end),
       orchard: orchard,
       staking: staking,
@@ -330,10 +354,13 @@ defmodule ZcashExplorerWeb.CrosslinkLive do
   defp build_finalizer_status_map(%{"finalizer_statuses" => list}) when is_list(list) do
     Enum.reduce(list, %{}, fn
       [key, status], acc when is_binary(key) and is_map(status) ->
-        Map.put(acc, key, status)
+        put_status(acc, key, status)
 
       {key, status}, acc when is_binary(key) and is_map(status) ->
-        Map.put(acc, key, status)
+        put_status(acc, key, status)
+
+      %{"pub_key" => key, "status" => status}, acc when is_binary(key) and is_map(status) ->
+        put_status(acc, key, status)
 
       _, acc ->
         acc
@@ -342,15 +369,89 @@ defmodule ZcashExplorerWeb.CrosslinkLive do
 
   defp build_finalizer_status_map(_), do: %{}
 
+  defp put_status(acc, key, status) do
+    forms = ZcashExplorer.Crosslink.pubkey_forms(key)
+    acc
+    |> Map.put(forms.raw, status)
+    |> Map.put(forms.display, status)
+    |> Map.put(String.downcase(key), status)
+  end
+
   defp normalize_roster_entry(%{"pub_key" => k, "voting_power" => v}) do
-    %{key: k, stake: to_float(v)}
+    forms = ZcashExplorer.Crosslink.pubkey_forms(k)
+    %{key: forms.display, raw_key: forms.raw, stake: to_float(v), active: true}
   end
 
   defp normalize_roster_entry([k, v]) do
-    %{key: k, stake: to_float(v)}
+    forms = ZcashExplorer.Crosslink.pubkey_forms(to_string(k))
+    %{key: forms.display, raw_key: forms.raw, stake: to_float(v), active: true}
   end
 
-  defp normalize_roster_entry(other), do: %{key: inspect(other), stake: 0.0}
+  defp normalize_roster_entry(other), do: %{key: inspect(other), raw_key: nil, stake: 0.0, active: false}
+
+  defp annotate_roster(roster) do
+    active_stake =
+      roster
+      |> Enum.take(@active_roster_max)
+      |> Enum.reduce(0.0, fn e, acc -> acc + e.stake end)
+
+    roster
+    |> Enum.with_index(1)
+    |> Enum.map(fn {entry, rank} ->
+      active = rank <= @active_roster_max and entry.stake > 0
+      commission_share =
+        if active and active_stake > 0 do
+          entry.stake / active_stake * (@commission_bps / 10_000)
+        else
+          0.0
+        end
+
+      Map.merge(entry, %{
+        rank: rank,
+        active: active,
+        commission_share: commission_share
+      })
+    end)
+  end
+
+  defp align_roster_keys(roster, status_map) do
+    Enum.map(roster, fn entry ->
+      key =
+        cond do
+          Map.has_key?(status_map, entry.key) -> entry.key
+          is_binary(entry.raw_key) and Map.has_key?(status_map, entry.raw_key) -> entry.raw_key
+          true -> entry.key
+        end
+
+      %{entry | key: key}
+    end)
+  end
+
+  defp inactive_finalizers(roster, %{"finalizer_statuses" => list}, status_map) when is_list(list) do
+    roster_keys =
+      roster
+      |> Enum.flat_map(fn e -> [e.key, e.raw_key] end)
+      |> Enum.reject(&is_nil/1)
+      |> MapSet.new()
+
+    list
+    |> Enum.flat_map(fn
+      [key, status] when is_binary(key) and is_map(status) -> [{key, status}]
+      {key, status} when is_binary(key) and is_map(status) -> [{key, status}]
+      _ -> []
+    end)
+    |> Enum.reject(fn {key, _} ->
+      forms = ZcashExplorer.Crosslink.pubkey_forms(key)
+      MapSet.member?(roster_keys, forms.display) or MapSet.member?(roster_keys, forms.raw)
+    end)
+    |> Enum.map(fn {key, status} ->
+      forms = ZcashExplorer.Crosslink.pubkey_forms(key)
+      display = if Map.has_key?(status_map, forms.display), do: forms.display, else: forms.raw
+      %{key: display, status: status, active: false}
+    end)
+  end
+
+  defp inactive_finalizers(_, _, _), do: []
 
   defp to_float(v) when is_number(v), do: v * 1.0
 
@@ -367,16 +468,23 @@ defmodule ZcashExplorerWeb.CrosslinkLive do
 
   defp staking_day_info(height) do
     offset = rem(height, @staking_day_length)
+    cycle = div(height, @staking_day_length)
+
+    base = %{
+      offset: offset,
+      cycle: cycle,
+      period: @staking_day_length,
+      window: @staking_window
+    }
 
     if offset < @staking_window do
-      %{status: :open, remaining: @staking_window - offset, next_in: nil, offset: offset}
+      Map.merge(base, %{status: :open, remaining: @staking_window - offset, next_in: nil})
     else
-      %{
+      Map.merge(base, %{
         status: :closed,
         remaining: nil,
-        next_in: @staking_day_length - offset,
-        offset: offset
-      }
+        next_in: @staking_day_length - offset
+      })
     end
   end
 
@@ -508,11 +616,18 @@ defmodule ZcashExplorerWeb.CrosslinkLive do
               <div class="text-xs uppercase tracking-wider text-gray-500 dark:text-gray-400">TFL Activated</div>
               <div class="mt-2 text-2xl font-bold">
                 <%= case @data.activated do %>
-                  <% true -> %><span class="text-emerald-500">Yes</span>
-                  <% false -> %><span class="text-rose-500">No</span>
+                  <% true -> %><span class="text-emerald-500">Crosslink</span>
+                  <% false -> %><span class="text-amber-500">PoW bootstrap</span>
                   <% _ -> %><span class="text-gray-400">—</span>
                 <% end %>
               </div>
+              <p class="mt-1 text-xs text-gray-500">
+                <%= case @data.activated do %>
+                  <% true -> %>Active roster earns commission
+                  <% false -> %>Finality starts after activation
+                  <% _ -> %>Node did not answer is_tfl_activated
+                <% end %>
+              </p>
             </div>
             <div class="rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4">
               <div class="text-xs uppercase tracking-wider text-gray-500 dark:text-gray-400">Chain Height</div>
@@ -554,10 +669,11 @@ defmodule ZcashExplorerWeb.CrosslinkLive do
                   </div>
                   <div class="mt-1 text-sm text-gray-500 dark:text-gray-400">
                     <%= if @data.staking_day.status == :open do %>
-                      <%= @data.staking_day.remaining %> / <%= @staking_window %> blocks left
+                      <%= @data.staking_day.remaining %> / <%= @staking_window %> blocks left in window
                     <% else %>
                       opens in <%= @data.staking_day.next_in %> blocks
                     <% end %>
+                    <span class="block text-gray-400">cycle <%= @data.staking_day.cycle %> · <%= @staking_period %> blocks (~3d)</span>
                   </div>
                 </div>
               <% else %>
@@ -632,8 +748,16 @@ defmodule ZcashExplorerWeb.CrosslinkLive do
                   <dd class="font-medium tabular-nums"><%= @data.pos_height || "—" %></dd>
                 </div>
                 <div class="flex justify-between">
-                  <dt class="text-gray-500 dark:text-gray-400">BFT Finalizers</dt>
+                  <dt class="text-gray-500 dark:text-gray-400">Active roster</dt>
+                  <dd class="font-medium tabular-nums"><%= length(@data.roster) %> / <%= @active_roster_max %></dd>
+                </div>
+                <div class="flex justify-between">
+                  <dt class="text-gray-500 dark:text-gray-400">Heard from</dt>
                   <dd class="font-medium tabular-nums"><%= @data.finalizer_count %></dd>
+                </div>
+                <div class="flex justify-between">
+                  <dt class="text-gray-500 dark:text-gray-400">Commission</dt>
+                  <dd class="font-medium tabular-nums">10% active · 90% bonds</dd>
                 </div>
                 <div class="flex justify-between">
                   <dt class="text-gray-500 dark:text-gray-400">Online stake</dt>
@@ -743,7 +867,7 @@ defmodule ZcashExplorerWeb.CrosslinkLive do
                 <span class="font-semibold">
                   Finalizer Roster
                   <span class="ml-2 text-sm font-normal text-gray-500">
-                    (<%= length(@data.roster) %> · <%= format_stake(@data.total_stake) %> cTAZ)
+                    (<%= length(@data.roster) %>/<%= @active_roster_max %> active · <%= format_stake(@data.total_stake) %> cTAZ)
                   </span>
                 </span>
               </button>
@@ -878,6 +1002,7 @@ defmodule ZcashExplorerWeb.CrosslinkLive do
                           <th class="text-left px-3 sm:px-5 py-3 font-medium">Finalizer</th>
                           <th class="text-right px-3 sm:px-5 py-3 font-medium whitespace-nowrap">Stake (cTAZ)</th>
                           <th class="text-right px-3 sm:px-5 py-3 font-medium w-28 sm:w-36">Share</th>
+                          <th class="text-right px-3 sm:px-5 py-3 font-medium whitespace-nowrap">Commission</th>
                         </tr>
                       </thead>
                       <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
@@ -918,14 +1043,17 @@ defmodule ZcashExplorerWeb.CrosslinkLive do
                                     style={"width: #{if @data.total_stake > 0, do: entry.stake / @data.total_stake * 100, else: 0}%"}
                                   ></div>
                                 </div>
-                                <span class="text-xs text-gray-500 w-10 text-right tabular-nums">
-                                  <%= if @data.total_stake > 0 do %>
-                                    <%= :erlang.float_to_binary(entry.stake / @data.total_stake * 100, decimals: 1) %>%
-                                  <% else %>
-                                    —
-                                  <% end %>
-                                </span>
+                                <span class="tabular-nums text-xs text-gray-500"><%= :erlang.float_to_binary(if(@data.total_stake > 0, do: entry.stake / @data.total_stake * 100, else: 0.0), decimals: 1) %>%</span>
                               </div>
+                            </td>
+                            <td class="px-3 sm:px-5 py-3 text-right tabular-nums align-middle whitespace-nowrap">
+                              <%= if entry.active do %>
+                                <span class="text-emerald-600 dark:text-emerald-400" title="Share of the 10% active-finalizer commission pool">
+                                  <%= :erlang.float_to_binary(entry.commission_share * 100, decimals: 2) %>%
+                                </span>
+                              <% else %>
+                                <span class="text-gray-400">inactive</span>
+                              <% end %>
                             </td>
                           </tr>
                         <% end %>
@@ -936,6 +1064,21 @@ defmodule ZcashExplorerWeb.CrosslinkLive do
               <% end %>
             <% end %>
           </div>
+
+          <%= if @data.inactive != [] do %>
+            <div class="rounded-xl shadow-sm border border-amber-200 dark:border-amber-900/50 bg-white dark:bg-gray-800 p-5">
+              <h2 class="font-semibold">Non-active finalizers <span class="ml-2 text-sm font-normal text-gray-500">(<%= length(@data.inactive) %>)</span></h2>
+              <p class="mt-1 text-xs text-gray-500">Heard by this node but outside the top <%= @active_roster_max %> by stake. v14 credits commission only inside the active roster, and a bond pointed outside it does not open a reward bank.</p>
+              <ul class="mt-3 space-y-1 text-sm font-mono">
+                <%= for entry <- @data.inactive do %>
+                  <li class="flex items-center gap-2">
+                    <span class={"inline-block w-2 h-2 rounded-full " <> liveness_dot(entry.status)}></span>
+                    <span title={entry.key}><%= short_key(entry.key) %></span>
+                  </li>
+                <% end %>
+              </ul>
+            </div>
+          <% end %>
 
           <div class="rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
             <button
@@ -956,6 +1099,30 @@ defmodule ZcashExplorerWeb.CrosslinkLive do
             </button>
             <%= if @show_positions do %>
               <div class="px-5 pb-5 space-y-4">
+                <p class="text-xs text-gray-500">Local node wallet only. Withdrawing is two steps: begin unbonding, then withdraw once the bond appears here as withdrawable. Bond key is the <code>pk</code> field. Commission (10%) accrues to active finalizers; 90% of PoS rewards accrue on bonds.</p>
+                <%= if @data.spendable do %>
+                  <dl class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+                    <div>
+                      <dt class="text-xs text-gray-500">Spendable</dt>
+                      <dd class="tabular-nums font-medium"><%= format_zat(@data.spendable["spendable_zats"]) %></dd>
+                    </div>
+                    <div>
+                      <dt class="text-xs text-gray-500">Pending</dt>
+                      <dd class="tabular-nums font-medium"><%= format_zat(@data.spendable["pending_zats"]) %></dd>
+                    </div>
+                    <div>
+                      <dt class="text-xs text-gray-500">Committed</dt>
+                      <dd class="tabular-nums font-medium"><%= format_zat(@data.spendable["committed_zats"]) %></dd>
+                    </div>
+                    <div>
+                      <dt class="text-xs text-gray-500">Wallet tip</dt>
+                      <dd class="tabular-nums font-medium"><%= @data.spendable["tip_height"] || "—" %></dd>
+                    </div>
+                  </dl>
+                <% end %>
+                <%= if @data.ufvk do %>
+                  <p class="text-xs text-gray-500 break-all">UFVK <span class="font-mono"><%= @data.ufvk %></span></p>
+                <% end %>
                 <div>
                   <h3 class="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">Active</h3>
                   <%= if @data.positions.active == [] do %>
