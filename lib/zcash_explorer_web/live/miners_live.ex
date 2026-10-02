@@ -22,10 +22,10 @@ defmodule ZcashExplorerWeb.MinersLive do
       )
 
     socket =
-      if socket.assigns.data do
-        socket
-      else
+      if connected?(socket) and is_nil(socket.assigns.data) do
         start_scan(socket, window)
+      else
+        socket
       end
 
     {:ok, socket}
@@ -211,8 +211,10 @@ defmodule ZcashExplorerWeb.MinersLive do
       <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta name="csrf-token" content={Plug.CSRFProtection.get_csrf_token()} />
         <title><%= @page_title %></title>
         <link rel="stylesheet" href="/assets/app.css">
+        <script defer phx-track-static type="text/javascript" src="/js/app.js"></script>
       </head>
       <body class="bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
         <header class="bg-gradient-to-r from-indigo-950 via-blue-900 to-cyan-800 text-white">
