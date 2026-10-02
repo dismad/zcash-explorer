@@ -329,9 +329,6 @@ defmodule ZcashExplorerWeb.MinersLive do
                               <a href={addr_href(miner.address)} class="font-mono text-xs text-blue-600 dark:text-blue-400 hover:underline break-all" title={miner.address}>
                                 <%= short_addr(miner.address) %>
                               </a>
-                              <%= if miner.blocks == 0 and miner.mined_zat > 0 do %>
-                                <span class="text-[10px] uppercase tracking-wide text-slate-400">funding</span>
-                              <% end %>
                             <% else %>
                               <span class="font-mono text-xs text-slate-500" title={miner.address}><%= short_addr(miner.address) %></span>
                             <% end %>
@@ -358,6 +355,15 @@ defmodule ZcashExplorerWeb.MinersLive do
                 <p class="p-8 text-center text-slate-500">No coinbase payouts in this window.</p>
               <% end %>
             </div>
+            <%= if Map.get(@data, :funding, []) != [] do %>
+              <p class="text-xs text-slate-500">
+                Coinbase funding outputs, not miners:
+                <%= for row <- @data.funding do %>
+                  <a href={"/address/#{row.address}"} class="font-mono text-blue-600 dark:text-blue-400 hover:underline" title={row.address}><%= short_addr(row.address) %></a>
+                  <%= format_zec(row.mined_zat) %> ZEC
+                <% end %>
+              </p>
+            <% end %>
           <% end %>
         </main>
       </body>

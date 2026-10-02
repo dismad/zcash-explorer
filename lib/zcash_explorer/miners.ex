@@ -84,6 +84,7 @@ defmodule ZcashExplorer.Miners do
     ranked =
       miners
       |> Map.values()
+      |> Enum.filter(&(&1.blocks > 0))
       |> Enum.sort_by(&{&1.blocks, &1.mined_zat}, :desc)
       |> Enum.take(100)
       |> Enum.with_index(1)
@@ -98,9 +99,16 @@ defmodule ZcashExplorer.Miners do
         Map.merge(miner, %{rank: rank, share: share, color: color(miner.address)})
       end)
 
+    funding =
+      miners
+      |> Map.values()
+      |> Enum.filter(&(&1.blocks == 0 and &1.mined_zat > 0))
+      |> Enum.sort_by(& &1.mined_zat, :desc)
+
     acc
     |> Map.put(:miners, miners)
     |> Map.put(:total_fees_zat, total_fees)
+    |> Map.put(:funding, funding)
     |> Map.put(:ranked, ranked)
   end
 
