@@ -20,6 +20,7 @@ defmodule ZcashExplorerWeb.AddressLive do
 
     total_received = Enum.reduce(txs, 0, fn tx, acc -> acc + tx["incoming"] end)
     total_spent    = Enum.reduce(txs, 0, fn tx, acc -> acc + tx["outgoing"] end)
+    range_mined    = Enum.reduce(txs, 0, fn tx, acc -> acc + tx["mined"] end)
 
     socket =
       assign(socket,
@@ -29,7 +30,9 @@ defmodule ZcashExplorerWeb.AddressLive do
         qr: qr,
         total_received: total_received,
         total_spent: total_spent,
-        mined_zat: ZcashExplorer.Miners.peek_historic(address, latest_block || 0),
+        range_mined: range_mined,
+        mined_zat: nil,
+        mined_blocks: nil,
         end_block: capped_e,
         start_block: s,
         latest_block: latest_block,
@@ -47,8 +50,8 @@ defmodule ZcashExplorerWeb.AddressLive do
 
   def handle_info({:load_mined, address, tip}, socket) do
     if socket.assigns.address == address do
-      zat = ZcashExplorer.Miners.historic_coinbase(address, tip)
-      {:noreply, assign(socket, mined_zat: zat)}
+      stats = ZcashExplorer.Miners.historic_coinbase(address, tip)
+      {:noreply, assign(socket, mined_zat: stats.zat, mined_blocks: stats.blocks)}
     else
       {:noreply, socket}
     end
@@ -103,8 +106,18 @@ defmodule ZcashExplorerWeb.AddressLive do
                   </div>
 
                   <div class="flex justify-between items-baseline border-b pb-3">
-                    <div class="text-gray-600" title="All coinbase outputs paid to this address. Spends are not subtracted.">Mined</div>
-                    <div class="font-medium"><%= mined_label(@mined_zat) %> ZEC</div>
+                    <div class="text-gray-600">Mined <span class="text-xs text-gray-400"><%= @start_block %>–<%= @end_block %></span></div>
+                    <div class="font-medium"><%= format_zec(@range_mined) %> ZEC</div>
+                  </div>
+
+                  <div class="flex justify-between items-baseline border-b pb-3">
+                    <div class="text-gray-600" title="Largest coinbase output, height 1 through tip.">All-time blocks</div>
+                    <div class="font-medium"><%= blocks_label(@mined_blocks) %></div>
+                  </div>
+
+                  <div class="flex justify-between items-baseline border-b pb-3">
+                    <div class="text-gray-600" title="All coinbase outputs from height 1 through tip. Spends are not subtracted.">All-time mined</div>
+                    <div class="font-medium"><%= zec_label(@mined_zat) %> ZEC</div>
                   </div>
 
                   <div class="flex justify-between items-baseline border-b pb-3">
@@ -208,8 +221,15 @@ defmodule ZcashExplorerWeb.AddressLive do
   end
   defp format_zec(_), do: 0.0
 
-  defp mined_label(nil), do: "loading"
-  defp mined_label(zat), do: format_zec(zat)
+  defp blocks_label(nil), do: "loading"
+  defp blocks_label(n) when is_integer(n), do: n
+  defp blocks_label(_), do: "loading"
+
+  defp zec_label(nil), do: "loading"
+  defp zec_label(zat), do: format_zec(zat)
+
+  defp coinbase?(%{"vin" => vins}) when is_list(vins), do: Enum.any?(vins, &Map.has_key?(&1, "coinbase"))
+  defp coinbase?(_), do: false
 
   defp block_tip(%{"blocks" => n}) when is_integer(n), do: n
   defp block_tip(_) do
@@ -225,10 +245,12 @@ defmodule ZcashExplorerWeb.AddressLive do
       {:ok, tx} = Zcashex.getrawtransaction(txid, 1)
       incoming = sum_matching_vout(tx, address)
       outgoing = sum_matching_vin(tx, address)
+      mined = if coinbase?(tx), do: incoming, else: 0
       tx
       |> Map.put("txid", txid)
       |> Map.put("incoming", incoming)
       |> Map.put("outgoing", outgoing)
+      |> Map.put("mined", mined)
       |> Map.put("height", tx["height"])
     end)
     |> Enum.reverse()

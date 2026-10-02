@@ -195,8 +195,8 @@ defmodule ZcashExplorerWeb.MinersLive do
 
         Task.start(fn ->
           Enum.each(pending, fn address ->
-            zat = ZcashExplorer.Miners.historic_coinbase(address, tip)
-            send(parent, {:miner_historic, window, address, zat})
+            stats = ZcashExplorer.Miners.historic_coinbase(address, tip)
+            send(parent, {:miner_historic, window, address, stats})
           end)
         end)
       end
@@ -225,7 +225,7 @@ defmodule ZcashExplorerWeb.MinersLive do
 
   defp cache_key(window), do: "miners:#{window}"
 
-  @sort_keys ~w(address share blocks txs historic window fees)
+  @sort_keys ~w(address share blocks txs window fees historic historic_blocks)
 
   defp parse_sort(key) when key in @sort_keys, do: String.to_atom(key)
   defp parse_sort(_), do: :blocks
@@ -245,6 +245,7 @@ defmodule ZcashExplorerWeb.MinersLive do
   defp sort_value(row, :blocks), do: {row.blocks, row.mined_zat}
   defp sort_value(row, :txs), do: row.txs
   defp sort_value(row, :historic), do: Map.get(row, :historic_mined_zat) || -1
+  defp sort_value(row, :historic_blocks), do: Map.get(row, :historic_blocks) || -1
   defp sort_value(row, :window), do: row.mined_zat
   defp sort_value(row, :fees), do: row.fees_zat
 
@@ -268,6 +269,13 @@ defmodule ZcashExplorerWeb.MinersLive do
   defp historic_zec(miner) do
     case Map.get(miner, :historic_mined_zat) do
       n when is_integer(n) -> format_zec(n)
+      _ -> "…"
+    end
+  end
+
+  defp historic_blocks(miner) do
+    case Map.get(miner, :historic_blocks) do
+      n when is_integer(n) -> n
       _ -> "…"
     end
   end
@@ -332,7 +340,7 @@ defmodule ZcashExplorerWeb.MinersLive do
               <h1 class="text-2xl font-bold">Top 100 miners</h1>
               <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
                 Default sort is blocks in this window, then window ZEC. Click a column to sort.
-                ZEC mined is every coinbase output paid to the address. Spends are not subtracted.
+                Blocks and ZEC mined follow the selected interval. All-time ignores the interval and does not subtract spends.
                 <%= if @data && @data.from && @data.tip do %>
                   Heights <%= @data.from %>–<%= @data.tip %>.
                 <% end %>
@@ -405,9 +413,10 @@ defmodule ZcashExplorerWeb.MinersLive do
                       <th class="text-right px-4 py-3 font-medium"><button type="button" phx-click="sort" phx-value-key="share" class="uppercase" title="Share of window coinbase">Share<%= sort_mark(:share, @sort_key, @sort_dir) %></button></th>
                       <th class="text-right px-4 py-3 font-medium"><button type="button" phx-click="sort" phx-value-key="blocks" class="uppercase">Blocks mined<%= sort_mark(:blocks, @sort_key, @sort_dir) %></button></th>
                       <th class="text-right px-4 py-3 font-medium"><button type="button" phx-click="sort" phx-value-key="txs" class="uppercase">Transactions<%= sort_mark(:txs, @sort_key, @sort_dir) %></button></th>
-                      <th class="text-right px-4 py-3 font-medium"><button type="button" phx-click="sort" phx-value-key="historic" class="uppercase" title="All coinbase outputs paid to this address. Spends are not subtracted.">ZEC mined<%= sort_mark(:historic, @sort_key, @sort_dir) %></button></th>
-                      <th class="text-right px-4 py-3 font-medium"><button type="button" phx-click="sort" phx-value-key="window" class="uppercase" title="Coinbase paid to this address inside the selected window.">Window<%= sort_mark(:window, @sort_key, @sort_dir) %></button></th>
+                      <th class="text-right px-4 py-3 font-medium"><button type="button" phx-click="sort" phx-value-key="window" class="uppercase" title="Coinbase paid to this address inside the selected interval.">ZEC mined<%= sort_mark(:window, @sort_key, @sort_dir) %></button></th>
                       <th class="text-right px-4 py-3 font-medium"><button type="button" phx-click="sort" phx-value-key="fees" class="uppercase">Fees<%= sort_mark(:fees, @sort_key, @sort_dir) %></button></th>
+                      <th class="text-right px-4 py-3 font-medium"><button type="button" phx-click="sort" phx-value-key="historic_blocks" class="uppercase" title="Largest coinbase output, height 1 through tip. Same on every interval.">All-time blocks<%= sort_mark(:historic_blocks, @sort_key, @sort_dir) %></button></th>
+                      <th class="text-right px-4 py-3 font-medium"><button type="button" phx-click="sort" phx-value-key="historic" class="uppercase" title="All coinbase outputs from height 1 through tip. Spends are not subtracted.">All-time ZEC<%= sort_mark(:historic, @sort_key, @sort_dir) %></button></th>
                     </tr>
                   </thead>
                   <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
@@ -440,9 +449,10 @@ defmodule ZcashExplorerWeb.MinersLive do
                         </td>
                         <td class="px-4 py-3 text-right tabular-nums"><%= miner.blocks %></td>
                         <td class="px-4 py-3 text-right tabular-nums"><%= miner.txs %></td>
-                        <td class="px-4 py-3 text-right tabular-nums font-medium" title="Historic coinbase. Spends ignored."><%= historic_zec(miner) %></td>
-                        <td class="px-4 py-3 text-right tabular-nums text-slate-500"><%= format_zec(miner.mined_zat) %></td>
+                        <td class="px-4 py-3 text-right tabular-nums font-medium"><%= format_zec(miner.mined_zat) %></td>
                         <td class="px-4 py-3 text-right tabular-nums text-emerald-600 dark:text-emerald-400"><%= format_zec(miner.fees_zat) %></td>
+                        <td class="px-4 py-3 text-right tabular-nums text-slate-500"><%= historic_blocks(miner) %></td>
+                        <td class="px-4 py-3 text-right tabular-nums"><%= historic_zec(miner) %></td>
                       </tr>
                     <% end %>
                   </tbody>

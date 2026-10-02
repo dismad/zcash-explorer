@@ -204,27 +204,31 @@ defmodule ZcashExplorer.Miners do
     "hsl(#{hue}, 72%, 46%)"
   end
   @doc """
-  Sum of coinbase outputs paid to `address` from height 1 through `tip`.
-  A later spend does not reduce this. Non-coinbase receives are ignored.
+  Lifetime coinbase paid to `address` from height 1 through `tip`.
+  Returns `%{zat: integer, blocks: integer}`. Spends are not subtracted.
+  Blocks use the same rule as the window table: largest coinbase output only.
   """
   def historic_coinbase(address, tip) when is_binary(address) and is_integer(tip) and tip > 0 do
     case historic_cached(address, tip) do
-      {:ok, zat} when is_integer(zat) ->
-        zat
+      {:ok, %{zat: zat, blocks: blocks}} when is_integer(zat) and is_integer(blocks) ->
+        %{zat: zat, blocks: blocks}
 
       _ ->
-        zat = fetch_historic(address, tip)
-        historic_store(address, tip, zat)
-        zat
+        stats = fetch_historic(address, tip)
+        historic_store(address, tip, stats)
+        stats
     end
   end
 
-  def historic_coinbase(_, _), do: 0
+  def historic_coinbase(_, _), do: %{zat: 0, blocks: 0}
 
   def peek_historic(address, tip) when is_binary(address) and is_integer(tip) and tip > 0 do
     case historic_cached(address, tip) do
-      {:ok, zat} when is_integer(zat) -> zat
-      _ -> nil
+      {:ok, %{zat: zat, blocks: blocks}} when is_integer(zat) and is_integer(blocks) ->
+        %{zat: zat, blocks: blocks}
+
+      _ ->
+        nil
     end
   end
 
@@ -251,31 +255,56 @@ defmodule ZcashExplorer.Miners do
     try do
       case Zcashex.getaddresstxids(address, 1, tip) do
         {:ok, txids} when is_list(txids) ->
-          Enum.reduce(txids, 0, fn txid, n -> n + coinbase_paid(txid, address) end)
+          Enum.reduce(Enum.uniq(txids), %{zat: 0, blocks: 0}, fn txid, acc ->
+            add_historic(acc, coinbase_paid(txid, address))
+          end)
 
         _ ->
-          0
+          %{zat: 0, blocks: 0}
       end
     catch
-      :exit, _ -> 0
+      :exit, _ -> %{zat: 0, blocks: 0}
     end
   end
+
+  defp add_historic(acc, %{zat: zat, block: true}) when zat > 0 do
+    %{acc | zat: acc.zat + zat, blocks: acc.blocks + 1}
+  end
+
+  defp add_historic(acc, %{zat: zat}) when is_integer(zat) do
+    %{acc | zat: acc.zat + zat}
+  end
+
+  defp add_historic(acc, _), do: acc
 
   defp coinbase_paid(txid, address) when is_binary(txid) do
     try do
       case Zcashex.getrawtransaction(txid, 1) do
         {:ok, tx} when is_map(tx) ->
-          if coinbase?(tx), do: paid_to(tx, address), else: 0
+          if coinbase?(tx) do
+            outputs = paid_outputs(tx)
+            zat = Enum.reduce(outputs, 0, fn o, n -> if o.address == address, do: n + o.zat, else: n end)
+            largest = Enum.max_by(outputs, & &1.zat, fn -> nil end)
+            %{zat: zat, block: largest != nil and largest.address == address and zat > 0}
+          else
+            %{zat: 0, block: false}
+          end
 
         _ ->
-          0
+          %{zat: 0, block: false}
       end
     catch
-      :exit, _ -> 0
+      :exit, _ -> %{zat: 0, block: false}
     end
   end
 
-  defp coinbase_paid(_, _), do: 0
+  defp coinbase_paid(_, _), do: %{zat: 0, block: false}
+
+  defp paid_outputs(tx) do
+    (tx["vout"] || [])
+    |> Enum.map(fn vout -> %{address: address_of(vout), zat: zats(vout)} end)
+    |> Enum.reject(&(&1.zat <= 0 or &1.address == "shielded-coinbase"))
+  end
 
   defp coinbase?(%{"vin" => vins}) when is_list(vins), do: Enum.any?(vins, &Map.has_key?(&1, "coinbase"))
   defp coinbase?(_), do: false
