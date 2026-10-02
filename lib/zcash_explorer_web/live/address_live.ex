@@ -21,21 +21,37 @@ defmodule ZcashExplorerWeb.AddressLive do
     total_received = Enum.reduce(txs, 0, fn tx, acc -> acc + tx["incoming"] end)
     total_spent    = Enum.reduce(txs, 0, fn tx, acc -> acc + tx["outgoing"] end)
 
-    {:ok,
-     assign(socket,
-       address: address,
-       balance: balance,
-       txs: txs,
-       qr: qr,
-       total_received: total_received,
-       total_spent: total_spent,
-       end_block: capped_e,
-       start_block: s,
-       latest_block: latest_block,
-       capped_e: capped_e,
-       zcash_network: network,
-       page_title: "Zcash Address #{address}"
-     )}
+    socket =
+      assign(socket,
+        address: address,
+        balance: balance,
+        txs: txs,
+        qr: qr,
+        total_received: total_received,
+        total_spent: total_spent,
+        mined_zat: nil,
+        end_block: capped_e,
+        start_block: s,
+        latest_block: latest_block,
+        capped_e: capped_e,
+        zcash_network: network,
+        page_title: "Zcash Address #{address}"
+      )
+
+    if connected?(socket) and is_integer(latest_block) do
+      send(self(), {:load_mined, address, latest_block})
+    end
+
+    {:ok, socket}
+  end
+
+  def handle_info({:load_mined, address, tip}, socket) do
+    if socket.assigns.address == address do
+      zat = ZcashExplorer.Miners.historic_coinbase(address, tip)
+      {:noreply, assign(socket, mined_zat: zat)}
+    else
+      {:noreply, socket}
+    end
   end
 
   def render(assigns) do
@@ -85,12 +101,17 @@ defmodule ZcashExplorerWeb.AddressLive do
                   </div>
 
                   <div class="flex justify-between items-baseline border-b pb-3">
-                    <div class="text-gray-600">Received</div>
+                    <div class="text-gray-600" title="All coinbase outputs paid to this address. Spends are not subtracted.">Mined</div>
+                    <div class="font-medium"><%= mined_label(@mined_zat) %> ZEC</div>
+                  </div>
+
+                  <div class="flex justify-between items-baseline border-b pb-3">
+                    <div class="text-gray-600" title={"Incoming outputs in blocks #{@start_block}–#{@end_block}. Not lifetime."}>Received</div>
                     <div class="font-medium"><%= format_zec(@total_received) %> ZEC</div>
                   </div>
 
                   <div class="flex justify-between items-baseline">
-                    <div class="text-gray-600">Spent</div>
+                    <div class="text-gray-600" title={"Spent outputs in blocks #{@start_block}–#{@end_block}. Not lifetime."}>Spent</div>
                     <div class="font-medium"><%= format_zec(@total_spent) %> ZEC</div>
                   </div>
                 </div>
@@ -185,6 +206,9 @@ defmodule ZcashExplorerWeb.AddressLive do
   end
   defp format_zec(_), do: 0.0
 
+  defp mined_label(nil), do: "…"
+  defp mined_label(zat), do: format_zec(zat)
+
   defp enrich_transactions(txids, address) do
     txids
     |> Enum.map(fn txid ->
@@ -202,14 +226,14 @@ defmodule ZcashExplorerWeb.AddressLive do
 
   defp sum_matching_vout(tx, address) do
     (tx["vout"] || [])
-    |> Enum.map(fn vout ->
-      case vout do
-        %{"scriptPubKey" => %{"addresses" => [^address]}} -> Map.get(vout, "valueZat", 0)
-        _ -> 0
-      end
+    |> Enum.reduce(0, fn vout, n ->
+      if ZcashExplorer.Miners.pays?(vout, address), do: n + value_zat(vout), else: n
     end)
-    |> Enum.sum()
   end
+
+  defp value_zat(%{"valueZat" => n}) when is_integer(n), do: n
+  defp value_zat(%{"value" => n}) when is_number(n), do: round(n * 100_000_000)
+  defp value_zat(_), do: 0
 
   defp sum_matching_vin(tx, address) do
     (tx["vin"] || [])
@@ -221,12 +245,7 @@ defmodule ZcashExplorerWeb.AddressLive do
         prev_vout_idx = vin["vout"]
         {:ok, prev_tx} = Zcashex.getrawtransaction(prev_txid, 1)
         prev_vout = Enum.at(prev_tx["vout"] || [], prev_vout_idx)
-        case prev_vout do
-          %{"scriptPubKey" => %{"addresses" => [^address]}} ->
-            Map.get(prev_vout, "valueZat", 0)
-          _ ->
-            0
-        end
+        if ZcashExplorer.Miners.pays?(prev_vout, address), do: value_zat(prev_vout), else: 0
       end
     end)
     |> Enum.sum()

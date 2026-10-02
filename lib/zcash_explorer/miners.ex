@@ -2,11 +2,15 @@ defmodule ZcashExplorer.Miners do
   @moduledoc """
   Aggregate recent coinbase payouts into a miner ranking.
 
-  One `getblock` verbosity-1 call per height, then the coinbase transaction.
-  Blocks mined is the largest coinbase output only. Smaller outputs in the
-  same coinbase are funding streams and do not increment the block count.
-  Fees are the excess of a block payout over the most common payout in the
-  window. Mainnet subsidy does not match this feature net.
+  Window columns (blocks, share, fees, window ZEC) come from one `getblock`
+  verbosity-1 call per height, then the coinbase transaction. Blocks mined is
+  the largest coinbase output only. Smaller outputs in the same coinbase are
+  funding streams and do not increment the block count. Fees are the excess of
+  a block payout over the most common payout in the window.
+
+  `historic_coinbase/2` is the ZEC mined figure: every coinbase output paid to
+  the address from height 1 through tip. Spends are not subtracted, and
+  non-coinbase receives are not included.
   """
 
   def scan(window) when is_integer(window) and window > 0 do
@@ -96,7 +100,12 @@ defmodule ZcashExplorer.Miners do
             0.0
           end
 
-        Map.merge(miner, %{rank: rank, share: share, color: color(miner.address)})
+        Map.merge(miner, %{
+          rank: rank,
+          share: share,
+          color: color(miner.address),
+          historic_mined_zat: nil
+        })
       end)
 
     funding =
@@ -193,5 +202,97 @@ defmodule ZcashExplorer.Miners do
   defp color(address) do
     hue = :erlang.phash2(address, 360)
     "hsl(#{hue}, 72%, 46%)"
+  end
+  @doc """
+  Sum of coinbase outputs paid to `address` from height 1 through `tip`.
+  A later spend does not reduce this. Non-coinbase receives are ignored.
+  """
+  def historic_coinbase(address, tip) when is_binary(address) and is_integer(tip) and tip > 0 do
+    case historic_cached(address, tip) do
+      {:ok, zat} when is_integer(zat) ->
+        zat
+
+      _ ->
+        zat = fetch_historic(address, tip)
+        historic_store(address, tip, zat)
+        zat
+    end
+  end
+
+  def historic_coinbase(_, _), do: 0
+
+  def pays?(vout, address) when is_map(vout) and is_binary(address) do
+    script = vout["scriptPubKey"] || %{}
+
+    cond do
+      script["address"] == address ->
+        true
+
+      is_list(script["addresses"]) and address in script["addresses"] ->
+        true
+
+      true ->
+        false
+    end
+  end
+
+  def pays?(_, _), do: false
+
+  defp fetch_historic(address, tip) do
+    try do
+      case Zcashex.getaddresstxids(address, 1, tip) do
+        {:ok, txids} when is_list(txids) ->
+          Enum.reduce(txids, 0, fn txid, n -> n + coinbase_paid(txid, address) end)
+
+        _ ->
+          0
+      end
+    catch
+      :exit, _ -> 0
+    end
+  end
+
+  defp coinbase_paid(txid, address) when is_binary(txid) do
+    try do
+      case Zcashex.getrawtransaction(txid, 1) do
+        {:ok, tx} when is_map(tx) ->
+          if coinbase?(tx), do: paid_to(tx, address), else: 0
+
+        _ ->
+          0
+      end
+    catch
+      :exit, _ -> 0
+    end
+  end
+
+  defp coinbase_paid(_, _), do: 0
+
+  defp coinbase?(%{"vin" => vins}) when is_list(vins), do: Enum.any?(vins, &Map.has_key?(&1, "coinbase"))
+  defp coinbase?(_), do: false
+
+  defp paid_to(tx, address) do
+    (tx["vout"] || [])
+    |> Enum.reduce(0, fn vout, n ->
+      if pays?(vout, address), do: n + zats(vout), else: n
+    end)
+  end
+
+  defp historic_key(address, tip), do: "miner-historic:" <> address <> ":" <> Integer.to_string(tip)
+
+  defp historic_cached(address, tip) do
+    try do
+      Cachex.get(:app_cache, historic_key(address, tip))
+    catch
+      _, _ -> :miss
+    end
+  end
+
+  defp historic_store(address, tip, zat) do
+    try do
+      Cachex.put(:app_cache, historic_key(address, tip), zat)
+    catch
+      _, _ -> :ok
+    end
   end
 end

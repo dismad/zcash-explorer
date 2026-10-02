@@ -25,7 +25,7 @@ defmodule ZcashExplorerWeb.MinersLive do
       if connected?(socket) and is_nil(socket.assigns.data) do
         start_scan(socket, window)
       else
-        socket
+        maybe_historic(socket)
       end
 
     {:ok, socket}
@@ -38,7 +38,7 @@ defmodule ZcashExplorerWeb.MinersLive do
     socket =
       case cached(window) do
         nil -> start_scan(socket, window)
-        data -> assign(socket, window: window, scanning: false, progress: nil, data: data)
+        data -> maybe_historic(assign(socket, window: window, scanning: false, progress: nil, data: data))
       end
 
     {:noreply, socket}
@@ -64,7 +64,7 @@ defmodule ZcashExplorerWeb.MinersLive do
         if done == total do
           data = ZcashExplorer.Miners.finalize(acc)
           Cachex.put(:app_cache, cache_key(window), %{data: data, at: System.system_time(:millisecond)})
-          assign(socket, scanning: false, data: data)
+          maybe_historic(assign(socket, scanning: false, data: data))
         else
           socket
         end
@@ -85,12 +85,29 @@ defmodule ZcashExplorerWeb.MinersLive do
         if done == total do
           data = ZcashExplorer.Miners.finalize(acc)
           Cachex.put(:app_cache, cache_key(window), %{data: data, at: System.system_time(:millisecond)})
-          assign(socket, scanning: false, data: data)
+          maybe_historic(assign(socket, scanning: false, data: data))
         else
           socket
         end
 
       {:noreply, socket}
+    end
+  end
+
+  def handle_info({:miner_historic, window, address, zat}, socket) do
+    data = socket.assigns.data
+
+    if socket.assigns.window != window or is_nil(data) do
+      {:noreply, socket}
+    else
+      ranked =
+        Enum.map(data.ranked, fn row ->
+          if row.address == address, do: Map.put(row, :historic_mined_zat, zat), else: row
+        end)
+
+      data = Map.put(data, :ranked, ranked)
+      Cachex.put(:app_cache, cache_key(window), %{data: data, at: System.system_time(:millisecond)})
+      {:noreply, assign(socket, data: data)}
     end
   end
 
@@ -145,6 +162,34 @@ defmodule ZcashExplorerWeb.MinersLive do
     send(parent, {:miner_done, window})
   end
 
+  defp maybe_historic(socket) do
+    data = socket.assigns[:data]
+
+    if connected?(socket) and is_map(data) and is_integer(data[:tip]) do
+      pending =
+        data.ranked
+        |> Enum.filter(fn row ->
+          row.address != "shielded-coinbase" and is_nil(Map.get(row, :historic_mined_zat))
+        end)
+        |> Enum.map(& &1.address)
+
+      if pending != [] do
+        parent = self()
+        window = socket.assigns.window
+        tip = data.tip
+
+        Task.start(fn ->
+          Enum.each(pending, fn address ->
+            zat = ZcashExplorer.Miners.historic_coinbase(address, tip)
+            send(parent, {:miner_historic, window, address, zat})
+          end)
+        end)
+      end
+    end
+
+    socket
+  end
+
   defp fetch_block(height) do
     try do
       Zcashex.getblock(Integer.to_string(height), 1)
@@ -177,6 +222,13 @@ defmodule ZcashExplorerWeb.MinersLive do
   end
 
   defp format_zec(_), do: "0.0000"
+
+  defp historic_zec(miner) do
+    case Map.get(miner, :historic_mined_zat) do
+      n when is_integer(n) -> format_zec(n)
+      _ -> "…"
+    end
+  end
 
   defp short_addr("shielded-coinbase"), do: "shielded coinbase"
 
@@ -237,7 +289,8 @@ defmodule ZcashExplorerWeb.MinersLive do
             <div>
               <h1 class="text-2xl font-bold">Top 100 miners</h1>
               <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                Coinbase payouts over the last <%= @window %> blocks.
+                Ranked by coinbase in the last <%= @window %> blocks.
+                ZEC mined is every coinbase output paid to the address. Spends are not subtracted.
                 <%= if @data && @data.from && @data.tip do %>
                   Heights <%= @data.from %>–<%= @data.tip %>.
                 <% end %>
@@ -291,7 +344,7 @@ defmodule ZcashExplorerWeb.MinersLive do
                 <div class="mt-1 text-2xl font-bold tabular-nums"><%= @data.scanned %></div>
               </div>
               <div class="rounded-2xl p-4 text-white bg-gradient-to-br from-amber-500 to-orange-500 shadow-sm">
-                <div class="text-xs uppercase tracking-wider text-white/80">ZEC mined</div>
+                <div class="text-xs uppercase tracking-wider text-white/80">Window mined</div>
                 <div class="mt-1 text-2xl font-bold tabular-nums"><%= format_zec(@data.total_mined_zat) %></div>
               </div>
               <div class="rounded-2xl p-4 text-white bg-gradient-to-br from-emerald-600 to-lime-500 shadow-sm">
@@ -310,7 +363,8 @@ defmodule ZcashExplorerWeb.MinersLive do
                       <th class="text-right px-4 py-3 font-medium">Share</th>
                       <th class="text-right px-4 py-3 font-medium">Blocks mined</th>
                       <th class="text-right px-4 py-3 font-medium">Transactions</th>
-                      <th class="text-right px-4 py-3 font-medium">ZEC mined</th>
+                      <th class="text-right px-4 py-3 font-medium" title="All coinbase outputs paid to this address. Spends are not subtracted.">ZEC mined</th>
+                      <th class="text-right px-4 py-3 font-medium" title="Coinbase paid to this address inside the selected window.">Window</th>
                       <th class="text-right px-4 py-3 font-medium">Fees</th>
                     </tr>
                   </thead>
@@ -344,7 +398,8 @@ defmodule ZcashExplorerWeb.MinersLive do
                         </td>
                         <td class="px-4 py-3 text-right tabular-nums"><%= miner.blocks %></td>
                         <td class="px-4 py-3 text-right tabular-nums"><%= miner.txs %></td>
-                        <td class="px-4 py-3 text-right tabular-nums font-medium"><%= format_zec(miner.mined_zat) %></td>
+                        <td class="px-4 py-3 text-right tabular-nums font-medium" title="Historic coinbase. Spends ignored."><%= historic_zec(miner) %></td>
+                        <td class="px-4 py-3 text-right tabular-nums text-slate-500"><%= format_zec(miner.mined_zat) %></td>
                         <td class="px-4 py-3 text-right tabular-nums text-emerald-600 dark:text-emerald-400"><%= format_zec(miner.fees_zat) %></td>
                       </tr>
                     <% end %>
