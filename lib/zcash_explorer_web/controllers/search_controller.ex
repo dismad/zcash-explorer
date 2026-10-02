@@ -63,14 +63,17 @@ defmodule ZcashExplorerWeb.SearchController do
           IO.puts("→ CLASSIFIED AS TRANSACTION ID (leading zeros: #{leading_zeros} < 10)")
           :transaction
         end
-      # 3. Addresses
-      String.starts_with?(qs, "t1") || String.starts_with?(qs, "t3") ->
+      # 3. Addresses. Mainnet and testnet/regtest HRPs.
+      # transparent: t1/t3 mainnet, tm/t2 testnet+regtest
+      # unified: u1 mainnet, utest testnet, uregtest regtest
+      # shielded: zs/zc mainnet, ztestsapling/zt testnet (all start with z)
+      String.starts_with?(qs, ["t1", "t3", "tm", "t2"]) ->
         IO.puts("→ CLASSIFIED AS TRANSPARENT ADDRESS")
         :transparent_address
       String.starts_with?(qs, "z") ->
         IO.puts("→ CLASSIFIED AS SHIELDED ADDRESS")
         :shielded_address
-      String.starts_with?(qs, "u1") ->
+      String.starts_with?(qs, ["u1", "utest", "uregtest"]) ->
         IO.puts("→ CLASSIFIED AS UNIFIED ADDRESS")
         :unified_address
       true ->

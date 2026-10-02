@@ -27,9 +27,9 @@ defmodule ZcashExplorerWeb.SearchLive do
     cond do
       is_valid_block?(block_resp)   -> {:noreply, push_navigate(socket, to: "/blocks/#{qs}")}
       is_valid_tx?(tx_resp)         -> {:noreply, push_navigate(socket, to: "/transactions/#{qs}")}
-      is_valid_taddr?(taddr_resp)   -> {:noreply, push_navigate(socket, to: "/address/#{qs}")}
-      is_valid_zaddr?(zaddr_resp)   -> {:noreply, push_navigate(socket, to: "/address/#{qs}")}
-      is_valid_unified_address?(zaddr_resp) -> {:noreply, push_navigate(socket, to: "/ua/#{qs}")}
+      is_valid_taddr?(taddr_resp) -> {:noreply, push_navigate(socket, to: "/address/#{qs}")}
+      is_valid_unified_address?(zaddr_resp) -> {:noreply, push_navigate(socket, to: "/shielded/#{qs}")}
+      is_valid_zaddr?(zaddr_resp) -> {:noreply, push_navigate(socket, to: "/shielded/#{qs}")}
       true ->
         {:noreply, put_flash(socket, :error, "No matching block, transaction, or address found.")}
     end

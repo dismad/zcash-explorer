@@ -4,8 +4,8 @@ defmodule ZcashExplorerWeb.ShieldedAddressLive do
   def mount(%{"address" => address} = _params, _session, socket) do
     network = Application.get_env(:zcash_explorer, Zcashex, [])[:zcash_network] || "mainnet"
 
-    # Reliable detection
-    is_unified = String.starts_with?(address, "u1")
+    # u1 mainnet, utest testnet, uregtest regtest. Sapling is zs / ztestsapling.
+    is_unified = String.starts_with?(address, ["u1", "utest", "uregtest"])
     is_sapling = String.starts_with?(address, "z") && !is_unified
 
     # For Unified Addresses: get all component receivers
