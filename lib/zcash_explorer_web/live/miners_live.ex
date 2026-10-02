@@ -308,7 +308,7 @@ defmodule ZcashExplorerWeb.MinersLive do
                       <th class="text-left px-4 py-3 font-medium w-16">#</th>
                       <th class="text-left px-4 py-3 font-medium">Address</th>
                       <th class="text-right px-4 py-3 font-medium">Share</th>
-                      <th class="text-right px-4 py-3 font-medium">Blocks</th>
+                      <th class="text-right px-4 py-3 font-medium">Blocks mined</th>
                       <th class="text-right px-4 py-3 font-medium">Transactions</th>
                       <th class="text-right px-4 py-3 font-medium">ZEC mined</th>
                       <th class="text-right px-4 py-3 font-medium">Fees</th>
@@ -329,6 +329,9 @@ defmodule ZcashExplorerWeb.MinersLive do
                               <a href={addr_href(miner.address)} class="font-mono text-xs text-blue-600 dark:text-blue-400 hover:underline break-all" title={miner.address}>
                                 <%= short_addr(miner.address) %>
                               </a>
+                              <%= if miner.blocks == 0 and miner.mined_zat > 0 do %>
+                                <span class="text-[10px] uppercase tracking-wide text-slate-400">funding</span>
+                              <% end %>
                             <% else %>
                               <span class="font-mono text-xs text-slate-500" title={miner.address}><%= short_addr(miner.address) %></span>
                             <% end %>

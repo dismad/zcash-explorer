@@ -2,13 +2,12 @@ defmodule ZcashExplorer.Miners do
   @moduledoc """
   Aggregate recent coinbase payouts into a miner ranking.
 
-  One `getblock` verbosity-2 call per height. Fees are coinbase value above
-  the consensus subsidy (80% before the first halving, full subsidy after).
+  One `getblock` verbosity-1 call per height, then the coinbase transaction.
+  Blocks mined is the largest coinbase output only. Smaller outputs in the
+  same coinbase are funding streams and do not increment the block count.
+  Fees are the excess of a block payout over the most common payout in the
+  window. Mainnet subsidy does not match this feature net.
   """
-
-  @subsidy_zats 1_250_000_000
-  @first_halving 1_046_400
-  @halving_interval 1_680_000
 
   def scan(window) when is_integer(window) and window > 0 do
     case Zcashex.getblockcount() do
@@ -29,6 +28,7 @@ defmodule ZcashExplorer.Miners do
       from: from,
       scanned: 0,
       miners: %{},
+      block_payouts: [],
       total_mined_zat: 0,
       total_fees_zat: 0,
       total_txs: 0
@@ -46,45 +46,45 @@ defmodule ZcashExplorer.Miners do
     end
   end
 
-  def add_block(acc, height, block) do
-    tx_count = tx_count(block)
-    user_txs = max(tx_count - 1, 0)
+  def add_block(acc, _height, block) do
+    user_txs = max(tx_count(block) - 1, 0)
     outputs = coinbase_outputs(block)
-    subsidy = subsidy_zats(height)
     paid = Enum.reduce(outputs, 0, fn o, n -> n + o.zat end)
-    fees = max(paid - subsidy, 0)
+    miner = Enum.max_by(outputs, & &1.zat, fn -> nil end)
 
     miners =
       Enum.reduce(outputs, acc.miners, fn output, miners ->
-        share = if paid > 0, do: output.zat / paid, else: 0
-        fee_share = round(fees * share)
-
-        Map.update(miners, output.address, new_miner(output.address), fn miner ->
-          %{
-            miner
-            | blocks: miner.blocks + 1,
-              txs: miner.txs + user_txs,
-              mined_zat: miner.mined_zat + output.zat,
-              fees_zat: miner.fees_zat + fee_share
-          }
+        Map.update(miners, output.address, new_miner(output.address), fn row ->
+          %{row | mined_zat: row.mined_zat + output.zat, payouts: row.payouts + 1}
         end)
       end)
+
+    miners =
+      if miner do
+        Map.update(miners, miner.address, new_miner(miner.address), fn row ->
+          %{row | blocks: row.blocks + 1, txs: row.txs + user_txs}
+        end)
+      else
+        miners
+      end
 
     %{
       acc
       | scanned: acc.scanned + 1,
         miners: miners,
+        block_payouts: if(miner, do: [{miner.address, paid} | acc.block_payouts], else: acc.block_payouts),
         total_mined_zat: acc.total_mined_zat + paid,
-        total_fees_zat: acc.total_fees_zat + fees,
         total_txs: acc.total_txs + user_txs
     }
   end
 
   def finalize(acc) do
+    {miners, total_fees} = assign_fees(acc.miners, Map.get(acc, :block_payouts, []))
+
     ranked =
-      acc.miners
+      miners
       |> Map.values()
-      |> Enum.sort_by(& &1.mined_zat, :desc)
+      |> Enum.sort_by(&{&1.blocks, &1.mined_zat}, :desc)
       |> Enum.take(100)
       |> Enum.with_index(1)
       |> Enum.map(fn {miner, rank} ->
@@ -98,23 +98,36 @@ defmodule ZcashExplorer.Miners do
         Map.merge(miner, %{rank: rank, share: share, color: color(miner.address)})
       end)
 
-    Map.put(acc, :ranked, ranked)
+    acc
+    |> Map.put(:miners, miners)
+    |> Map.put(:total_fees_zat, total_fees)
+    |> Map.put(:ranked, ranked)
   end
 
-  def subsidy_zats(height) when is_integer(height) and height >= 0 do
-    halvings =
-      if height < @first_halving do
-        0
-      else
-        1 + div(height - @first_halving, @halving_interval)
-      end
+  # Excess over the modal block payout. Feature-net issuance is not the
+  # mainnet pre-halving subsidy, which was clamping every fee to zero.
+  defp assign_fees(miners, payouts) do
+    base =
+      payouts
+      |> Enum.map(fn {_address, paid} -> paid end)
+      |> Enum.frequencies()
+      |> Enum.max_by(fn {_paid, count} -> count end, fn -> {0, 0} end)
+      |> elem(0)
 
-    subsidy = div(@subsidy_zats, Integer.pow(2, min(halvings, 28)))
-    if height < @first_halving, do: div(subsidy * 4, 5), else: subsidy
+    Enum.reduce(payouts, {miners, 0}, fn {address, paid}, {miners, total} ->
+      fee = max(paid - base, 0)
+
+      miners =
+        Map.update(miners, address, new_miner(address), fn row ->
+          %{row | fees_zat: row.fees_zat + fee}
+        end)
+
+      {miners, total + fee}
+    end)
   end
 
   defp new_miner(address) do
-    %{address: address, blocks: 0, txs: 0, mined_zat: 0, fees_zat: 0}
+    %{address: address, blocks: 0, payouts: 0, txs: 0, mined_zat: 0, fees_zat: 0}
   end
 
   defp tx_count(%{"nTx" => n}) when is_integer(n), do: n
@@ -170,9 +183,7 @@ defmodule ZcashExplorer.Miners do
   defp zats(_), do: 0
 
   defp color(address) do
-    hue =
-      :erlang.phash2(address, 360)
-
+    hue = :erlang.phash2(address, 360)
     "hsl(#{hue}, 72%, 46%)"
   end
 end
