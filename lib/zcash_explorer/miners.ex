@@ -36,9 +36,13 @@ defmodule ZcashExplorer.Miners do
   end
 
   def add_height(acc, height) do
-    case Zcashex.getblock(Integer.to_string(height), 2) do
-      {:ok, block} when is_map(block) -> add_block(acc, height, block)
-      _ -> %{acc | scanned: acc.scanned + 1}
+    try do
+      case Zcashex.getblock(Integer.to_string(height), 1) do
+        {:ok, block} when is_map(block) -> add_block(acc, height, block)
+        _ -> %{acc | scanned: acc.scanned + 1}
+      end
+    catch
+      :exit, _ -> %{acc | scanned: acc.scanned + 1}
     end
   end
 

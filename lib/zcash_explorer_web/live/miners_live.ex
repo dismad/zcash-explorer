@@ -2,8 +2,7 @@ defmodule ZcashExplorerWeb.MinersLive do
   use Phoenix.LiveView, layout: false
 
   @windows [144, 288, 576, 1152]
-  @default_window 576
-  @chunk 24
+  @default_window 144
   @cache_ms 600_000
 
   @impl true
@@ -51,30 +50,54 @@ defmodule ZcashExplorerWeb.MinersLive do
   end
 
   @impl true
-  def handle_info({:scan_chunk, window, heights, acc}, socket) do
+  def handle_info({:miner_block, window, height, block, done, total, started}, socket) do
     if socket.assigns.window != window or not socket.assigns.scanning do
       {:noreply, socket}
     else
-      {chunk, rest} = Enum.split(heights, @chunk)
-      acc = Enum.reduce(chunk, acc, &ZcashExplorer.Miners.add_height(&2, &1))
-      data = ZcashExplorer.Miners.finalize(acc)
-      total = acc.scanned + length(rest)
+      acc = ZcashExplorer.Miners.add_block(socket.assigns.acc, height, block)
+      elapsed = System.monotonic_time(:millisecond) - started
+      progress = %{done: done, total: total, elapsed_ms: elapsed}
+
+      socket = assign(socket, acc: acc, data: ZcashExplorer.Miners.finalize(acc), progress: progress)
 
       socket =
-        assign(socket,
-          data: data,
-          progress: %{done: acc.scanned, total: total}
-        )
-
-      socket =
-        if rest == [] do
+        if done == total do
+          data = ZcashExplorer.Miners.finalize(acc)
           Cachex.put(:app_cache, cache_key(window), %{data: data, at: System.system_time(:millisecond)})
-          assign(socket, scanning: false)
+          assign(socket, scanning: false, data: data)
         else
-          send(self(), {:scan_chunk, window, rest, acc})
           socket
         end
 
+      {:noreply, socket}
+    end
+  end
+
+  def handle_info({:miner_skip, window, done, total, started}, socket) do
+    if socket.assigns.window != window or not socket.assigns.scanning do
+      {:noreply, socket}
+    else
+      acc = %{socket.assigns.acc | scanned: socket.assigns.acc.scanned + 1}
+      elapsed = System.monotonic_time(:millisecond) - started
+      socket = assign(socket, acc: acc, data: ZcashExplorer.Miners.finalize(acc), progress: %{done: done, total: total, elapsed_ms: elapsed})
+
+      socket =
+        if done == total do
+          data = ZcashExplorer.Miners.finalize(acc)
+          Cachex.put(:app_cache, cache_key(window), %{data: data, at: System.system_time(:millisecond)})
+          assign(socket, scanning: false, data: data)
+        else
+          socket
+        end
+
+      {:noreply, socket}
+    end
+  end
+
+  def handle_info({:miner_done, window}, socket) do
+    if socket.assigns.window == window do
+      {:noreply, assign(socket, scanning: false)}
+    else
       {:noreply, socket}
     end
   end
@@ -89,12 +112,44 @@ defmodule ZcashExplorerWeb.MinersLive do
     from = if tip, do: max(tip - window + 1, 1), else: 1
     heights = if tip, do: Enum.to_list(from..tip), else: []
     acc = ZcashExplorer.Miners.empty(tip, from)
+    parent = self()
+    started = System.monotonic_time(:millisecond)
 
-    if heights == [] do
-      assign(socket, window: window, scanning: false, progress: nil, data: ZcashExplorer.Miners.finalize(acc))
-    else
-      send(self(), {:scan_chunk, window, heights, acc})
-      assign(socket, window: window, scanning: true, progress: %{done: 0, total: length(heights)}, data: ZcashExplorer.Miners.finalize(acc))
+    if heights != [] do
+      Task.start(fn -> scan_heights(parent, window, heights, started) end)
+    end
+
+    assign(socket,
+      window: window,
+      scanning: heights != [],
+      acc: acc,
+      progress: %{done: 0, total: length(heights), elapsed_ms: 0},
+      data: ZcashExplorer.Miners.finalize(acc)
+    )
+  end
+
+  defp scan_heights(parent, window, heights, started) do
+    total = length(heights)
+
+    Enum.with_index(heights, 1)
+    |> Enum.each(fn {height, done} ->
+      case fetch_block(height) do
+        {:ok, block} ->
+          send(parent, {:miner_block, window, height, block, done, total, started})
+
+        _ ->
+          send(parent, {:miner_skip, window, done, total, started})
+      end
+    end)
+
+    send(parent, {:miner_done, window})
+  end
+
+  defp fetch_block(height) do
+    try do
+      Zcashex.getblock(Integer.to_string(height), 1)
+    catch
+      :exit, _ -> {:error, :timeout}
     end
   end
 
@@ -139,6 +194,14 @@ defmodule ZcashExplorerWeb.MinersLive do
   defp medal(2), do: "bg-slate-300 text-slate-800"
   defp medal(3), do: "bg-orange-400 text-orange-950"
   defp medal(_), do: "bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-200"
+
+  defp eta(%{done: done, total: total, elapsed_ms: elapsed}) when done > 0 and total > done do
+    remain = round(elapsed / done * (total - done) / 1000)
+    "#{remain}s left"
+  end
+
+  defp eta(%{done: 0}), do: "one getblock per height"
+  defp eta(_), do: nil
 
   @impl true
   def render(assigns) do
@@ -199,7 +262,12 @@ defmodule ZcashExplorerWeb.MinersLive do
             <div class="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4">
               <div class="flex justify-between text-xs text-slate-500 mb-2">
                 <span>Scanning blocks</span>
-                <span class="tabular-nums"><%= @progress.done %> / <%= @progress.total %></span>
+                <span class="tabular-nums">
+                  <%= @progress.done %> / <%= @progress.total %>
+                  <%= if eta = eta(@progress) do %>
+                    · <%= eta %>
+                  <% end %>
+                </span>
               </div>
               <div class="h-2 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden">
                 <div
@@ -255,8 +323,8 @@ defmodule ZcashExplorerWeb.MinersLive do
                         <td class="px-4 py-3">
                           <div class="flex items-center gap-3 min-w-0">
                             <span class="h-8 w-1.5 rounded-full shrink-0" style={"background: #{miner.color}"}></span>
-                            <%= if href = addr_href(miner.address) do %>
-                              <a href={href} class="font-mono text-xs text-blue-600 dark:text-blue-400 hover:underline break-all" title={miner.address}>
+                            <%= if addr_href(miner.address) do %>
+                              <a href={addr_href(miner.address)} class="font-mono text-xs text-blue-600 dark:text-blue-400 hover:underline break-all" title={miner.address}>
                                 <%= short_addr(miner.address) %>
                               </a>
                             <% else %>
