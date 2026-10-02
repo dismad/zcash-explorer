@@ -109,7 +109,7 @@ defmodule ZcashExplorerWeb.MinersLive do
     end
   end
 
-  def handle_info({:miner_historic, window, address, zat}, socket) do
+  def handle_info({:miner_historic, window, address, stats}, socket) do
     data = socket.assigns.data
 
     if socket.assigns.window != window or is_nil(data) do
@@ -117,7 +117,11 @@ defmodule ZcashExplorerWeb.MinersLive do
     else
       ranked =
         Enum.map(data.ranked, fn row ->
-          if row.address == address, do: Map.put(row, :historic_mined_zat, zat), else: row
+          if row.address == address do
+            Map.merge(row, %{historic_mined_zat: stats.zat, historic_blocks: stats.blocks})
+          else
+            row
+          end
         end)
 
       data = Map.put(data, :ranked, ranked)
@@ -177,6 +181,10 @@ defmodule ZcashExplorerWeb.MinersLive do
     send(parent, {:miner_done, window})
   end
 
+  defp historic_ready?(row) do
+    is_integer(Map.get(row, :historic_mined_zat)) and is_integer(Map.get(row, :historic_blocks))
+  end
+
   defp maybe_historic(socket) do
     data = socket.assigns[:data]
 
@@ -184,7 +192,7 @@ defmodule ZcashExplorerWeb.MinersLive do
       pending =
         data.ranked
         |> Enum.filter(fn row ->
-          row.address != "shielded-coinbase" and is_nil(Map.get(row, :historic_mined_zat))
+          row.address != "shielded-coinbase" and not historic_ready?(row)
         end)
         |> Enum.map(& &1.address)
 
