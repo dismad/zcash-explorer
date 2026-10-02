@@ -99,35 +99,39 @@ defmodule ZcashExplorerWeb.AddressLive do
                   <img src={"data:image/png;base64,#{@qr}"} class="w-56 h-56 border border-gray-200 dark:border-gray-700 rounded-3xl" alt="QR Code" />
                 </div>
 
-                <div class="space-y-6 text-sm">
-                  <div class="flex justify-between items-baseline border-b pb-3">
+                <div class="text-sm">
+                  <div class="flex justify-between items-baseline pb-4">
                     <div class="text-gray-600">Balance</div>
                     <div class="font-semibold text-emerald-600 text-2xl"><%= format_zec(@balance["balance"] || 0) %> ZEC</div>
                   </div>
 
-                  <div class="flex justify-between items-baseline border-b pb-3">
-                    <div class="text-gray-600">Mined <span class="text-xs text-gray-400"><%= @start_block %>–<%= @end_block %></span></div>
-                    <div class="font-medium"><%= format_zec(@range_mined) %> ZEC</div>
+                  <div class="border-t pt-4">
+                    <div class="text-xs uppercase tracking-wider text-gray-400 mb-3">All time</div>
+                    <div class="flex justify-between items-baseline py-2">
+                      <div class="text-gray-600" title="Blocks where this address had the largest coinbase output.">Blocks mined</div>
+                      <div class="font-medium tabular-nums"><%= blocks_label(@mined_blocks) %></div>
+                    </div>
+                    <div class="flex justify-between items-baseline py-2">
+                      <div class="text-gray-600" title="Coinbase paid to this address. Spends are not subtracted.">Mined</div>
+                      <div class="font-medium tabular-nums"><%= zec_label(@mined_zat) %> ZEC</div>
+                    </div>
                   </div>
 
-                  <div class="flex justify-between items-baseline border-b pb-3">
-                    <div class="text-gray-600" title="Largest coinbase output, height 1 through tip.">All-time blocks</div>
-                    <div class="font-medium"><%= blocks_label(@mined_blocks) %></div>
-                  </div>
-
-                  <div class="flex justify-between items-baseline border-b pb-3">
-                    <div class="text-gray-600" title="All coinbase outputs from height 1 through tip. Spends are not subtracted.">All-time mined</div>
-                    <div class="font-medium"><%= zec_label(@mined_zat) %> ZEC</div>
-                  </div>
-
-                  <div class="flex justify-between items-baseline border-b pb-3">
-                    <div class="text-gray-600">Received <span class="text-xs text-gray-400"><%= @start_block %>–<%= @end_block %></span></div>
-                    <div class="font-medium"><%= format_zec(@total_received) %> ZEC</div>
-                  </div>
-
-                  <div class="flex justify-between items-baseline">
-                    <div class="text-gray-600">Spent <span class="text-xs text-gray-400"><%= @start_block %>–<%= @end_block %></span></div>
-                    <div class="font-medium"><%= format_zec(@total_spent) %> ZEC</div>
+                  <div class="border-t mt-3 pt-4">
+                    <div class="text-xs uppercase tracking-wider text-gray-400 mb-1">This page</div>
+                    <div class="text-xs text-gray-400 mb-3">Heights <%= @start_block %>–<%= @end_block %>. Not lifetime.</div>
+                    <div class="flex justify-between items-baseline py-2">
+                      <div class="text-gray-600">Mined</div>
+                      <div class="font-medium tabular-nums"><%= format_zec(@range_mined) %> ZEC</div>
+                    </div>
+                    <div class="flex justify-between items-baseline py-2">
+                      <div class="text-gray-600">Received</div>
+                      <div class="font-medium tabular-nums"><%= format_zec(@total_received) %> ZEC</div>
+                    </div>
+                    <div class="flex justify-between items-baseline py-2">
+                      <div class="text-gray-600">Spent</div>
+                      <div class="font-medium tabular-nums"><%= format_zec(@total_spent) %> ZEC</div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -137,7 +141,8 @@ defmodule ZcashExplorerWeb.AddressLive do
             <div class="lg:col-span-8">
               <div class="bg-white dark:bg-gray-800 shadow rounded-3xl p-6">
                 <h2 class="text-xl font-semibold mb-6">
-                  Transactions from block #<%= @start_block %> to #<%= @end_block %>
+                  Transactions
+                  <span class="block text-sm font-normal text-gray-500 mt-1">Heights <%= @start_block %>–<%= @end_block %></span>
                 </h2>
 
                 <div class="space-y-4">
