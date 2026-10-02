@@ -18,6 +18,8 @@ defmodule ZcashExplorerWeb.MinersLive do
         window: window,
         scanning: false,
         progress: nil,
+        sort_key: :blocks,
+        sort_dir: :desc,
         data: cached(window)
       )
 
@@ -42,6 +44,19 @@ defmodule ZcashExplorerWeb.MinersLive do
       end
 
     {:noreply, socket}
+  end
+
+  def handle_event("sort", %{"key" => key}, socket) do
+    key = parse_sort(key)
+
+    dir =
+      if socket.assigns.sort_key == key and socket.assigns.sort_dir == :desc do
+        :asc
+      else
+        :desc
+      end
+
+    {:noreply, assign(socket, sort_key: key, sort_dir: dir)}
   end
 
   def handle_event("rescan", _, socket) do
@@ -210,6 +225,33 @@ defmodule ZcashExplorerWeb.MinersLive do
 
   defp cache_key(window), do: "miners:#{window}"
 
+  @sort_keys ~w(address share blocks txs historic window fees)
+
+  defp parse_sort(key) when key in @sort_keys, do: String.to_atom(key)
+  defp parse_sort(_), do: :blocks
+
+  defp sorted_miners(data, key, dir) do
+    data.ranked
+    |> Enum.sort_by(&sort_value(&1, key), sort_dir(dir))
+    |> Enum.with_index(1)
+    |> Enum.map(fn {row, rank} -> Map.put(row, :rank, rank) end)
+  end
+
+  defp sort_dir(:asc), do: &<=/2
+  defp sort_dir(_), do: &>=/2
+
+  defp sort_value(row, :address), do: row.address
+  defp sort_value(row, :share), do: row.share
+  defp sort_value(row, :blocks), do: {row.blocks, row.mined_zat}
+  defp sort_value(row, :txs), do: row.txs
+  defp sort_value(row, :historic), do: Map.get(row, :historic_mined_zat) || -1
+  defp sort_value(row, :window), do: row.mined_zat
+  defp sort_value(row, :fees), do: row.fees_zat
+
+  defp sort_mark(key, key, :desc), do: " ↓"
+  defp sort_mark(key, key, :asc), do: " ↑"
+  defp sort_mark(_, _, _), do: ""
+
   defp parse_window(window) do
     case Integer.parse(to_string(window)) do
       {n, _} -> if n in @windows, do: n, else: @default_window
@@ -289,7 +331,7 @@ defmodule ZcashExplorerWeb.MinersLive do
             <div>
               <h1 class="text-2xl font-bold">Top 100 miners</h1>
               <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                Ranked by coinbase in the last <%= @window %> blocks.
+                Default sort is blocks in this window, then window ZEC. Click a column to sort.
                 ZEC mined is every coinbase output paid to the address. Spends are not subtracted.
                 <%= if @data && @data.from && @data.tip do %>
                   Heights <%= @data.from %>–<%= @data.tip %>.
@@ -359,17 +401,17 @@ defmodule ZcashExplorerWeb.MinersLive do
                   <thead class="bg-slate-50 dark:bg-slate-950 text-xs uppercase text-slate-500">
                     <tr>
                       <th class="text-left px-4 py-3 font-medium w-16">#</th>
-                      <th class="text-left px-4 py-3 font-medium">Address</th>
-                      <th class="text-right px-4 py-3 font-medium">Share</th>
-                      <th class="text-right px-4 py-3 font-medium">Blocks mined</th>
-                      <th class="text-right px-4 py-3 font-medium">Transactions</th>
-                      <th class="text-right px-4 py-3 font-medium" title="All coinbase outputs paid to this address. Spends are not subtracted.">ZEC mined</th>
-                      <th class="text-right px-4 py-3 font-medium" title="Coinbase paid to this address inside the selected window.">Window</th>
-                      <th class="text-right px-4 py-3 font-medium">Fees</th>
+                      <th class="text-left px-4 py-3 font-medium"><button type="button" phx-click="sort" phx-value-key="address" class="uppercase">Address<%= sort_mark(:address, @sort_key, @sort_dir) %></button></th>
+                      <th class="text-right px-4 py-3 font-medium"><button type="button" phx-click="sort" phx-value-key="share" class="uppercase" title="Share of window coinbase">Share<%= sort_mark(:share, @sort_key, @sort_dir) %></button></th>
+                      <th class="text-right px-4 py-3 font-medium"><button type="button" phx-click="sort" phx-value-key="blocks" class="uppercase">Blocks mined<%= sort_mark(:blocks, @sort_key, @sort_dir) %></button></th>
+                      <th class="text-right px-4 py-3 font-medium"><button type="button" phx-click="sort" phx-value-key="txs" class="uppercase">Transactions<%= sort_mark(:txs, @sort_key, @sort_dir) %></button></th>
+                      <th class="text-right px-4 py-3 font-medium"><button type="button" phx-click="sort" phx-value-key="historic" class="uppercase" title="All coinbase outputs paid to this address. Spends are not subtracted.">ZEC mined<%= sort_mark(:historic, @sort_key, @sort_dir) %></button></th>
+                      <th class="text-right px-4 py-3 font-medium"><button type="button" phx-click="sort" phx-value-key="window" class="uppercase" title="Coinbase paid to this address inside the selected window.">Window<%= sort_mark(:window, @sort_key, @sort_dir) %></button></th>
+                      <th class="text-right px-4 py-3 font-medium"><button type="button" phx-click="sort" phx-value-key="fees" class="uppercase">Fees<%= sort_mark(:fees, @sort_key, @sort_dir) %></button></th>
                     </tr>
                   </thead>
                   <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
-                    <%= for miner <- @data.ranked do %>
+                    <%= for miner <- sorted_miners(@data, @sort_key, @sort_dir) do %>
                       <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/60">
                         <td class="px-4 py-3">
                           <span class={"inline-flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold " <> medal(miner.rank)}>

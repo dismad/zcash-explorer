@@ -5,7 +5,7 @@ defmodule ZcashExplorerWeb.AddressLive do
     network = Application.get_env(:zcash_explorer, Zcashex, [])[:zcash_network] || "mainnet"
 
     {:ok, info} = Cachex.get(:app_cache, "metrics")
-    latest_block = info["blocks"]
+    latest_block = block_tip(info)
 
     default_range = 1152
     e = params["e"] |> parse_int(latest_block)
@@ -29,7 +29,7 @@ defmodule ZcashExplorerWeb.AddressLive do
         qr: qr,
         total_received: total_received,
         total_spent: total_spent,
-        mined_zat: nil,
+        mined_zat: ZcashExplorer.Miners.peek_historic(address, latest_block || 0),
         end_block: capped_e,
         start_block: s,
         latest_block: latest_block,
@@ -62,7 +62,9 @@ defmodule ZcashExplorerWeb.AddressLive do
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title><%= @page_title %></title>
+        <meta name="csrf-token" content={Plug.CSRFProtection.get_csrf_token()} />
         <link rel="stylesheet" href="/assets/app.css">
+        <script defer phx-track-static type="text/javascript" src="/js/app.js"></script>
       </head>
       <body class="bg-gray-50 dark:bg-gray-900">
 
@@ -106,12 +108,12 @@ defmodule ZcashExplorerWeb.AddressLive do
                   </div>
 
                   <div class="flex justify-between items-baseline border-b pb-3">
-                    <div class="text-gray-600" title={"Incoming outputs in blocks #{@start_block}–#{@end_block}. Not lifetime."}>Received</div>
+                    <div class="text-gray-600">Received <span class="text-xs text-gray-400"><%= @start_block %>–<%= @end_block %></span></div>
                     <div class="font-medium"><%= format_zec(@total_received) %> ZEC</div>
                   </div>
 
                   <div class="flex justify-between items-baseline">
-                    <div class="text-gray-600" title={"Spent outputs in blocks #{@start_block}–#{@end_block}. Not lifetime."}>Spent</div>
+                    <div class="text-gray-600">Spent <span class="text-xs text-gray-400"><%= @start_block %>–<%= @end_block %></span></div>
                     <div class="font-medium"><%= format_zec(@total_spent) %> ZEC</div>
                   </div>
                 </div>
@@ -206,8 +208,16 @@ defmodule ZcashExplorerWeb.AddressLive do
   end
   defp format_zec(_), do: 0.0
 
-  defp mined_label(nil), do: "…"
+  defp mined_label(nil), do: "loading"
   defp mined_label(zat), do: format_zec(zat)
+
+  defp block_tip(%{"blocks" => n}) when is_integer(n), do: n
+  defp block_tip(_) do
+    case Zcashex.getblockcount() do
+      {:ok, n} when is_integer(n) -> n
+      _ -> nil
+    end
+  end
 
   defp enrich_transactions(txids, address) do
     txids

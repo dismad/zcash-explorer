@@ -221,6 +221,15 @@ defmodule ZcashExplorer.Miners do
 
   def historic_coinbase(_, _), do: 0
 
+  def peek_historic(address, tip) when is_binary(address) and is_integer(tip) and tip > 0 do
+    case historic_cached(address, tip) do
+      {:ok, zat} when is_integer(zat) -> zat
+      _ -> nil
+    end
+  end
+
+  def peek_historic(_, _), do: nil
+
   def pays?(vout, address) when is_map(vout) and is_binary(address) do
     script = vout["scriptPubKey"] || %{}
 
