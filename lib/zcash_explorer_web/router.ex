@@ -48,6 +48,7 @@ defmodule ZcashExplorerWeb.Router do
 
     # Crosslink
     live "/live/crosslink", CrosslinkLive
+    live "/miners", MinersLive
     
     # Search and Address pages
     get "/search", SearchController, :search

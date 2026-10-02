@@ -725,6 +725,9 @@ defmodule ZcashExplorerWeb.CrosslinkLive do
                   <dd class="font-medium tabular-nums"><%= format_solps(@data.network_solps) %></dd>
                 </div>
               </dl>
+              <a href="/miners" class="mt-4 inline-flex items-center text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline">
+                Top miners
+              </a>
             </div>
 
             <!-- PoS / TFL -->
