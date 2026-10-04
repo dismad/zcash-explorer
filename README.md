@@ -80,38 +80,49 @@ sudo apt install -y \
 
 ## 2. Install asdf (Elixir / Erlang / Node)
 
-```bash
-git clone https://github.com/asdf-vm/asdf.git ~/.asdf --branch v0.15.0
+asdf 0.20 is a Go binary. Do not clone the old v0.15.0 shell script, and do not source `~/.asdf/asdf.sh`.
 
-echo '. "$HOME/.asdf/asdf.sh"' >> ~/.bashrc
-echo '. "$HOME/.asdf/completions/asdf.bash"' >> ~/.bashrc
-source ~/.bashrc
+```bash
+cd /tmp
+curl -fsSL -o asdf.tar.gz \
+  https://github.com/asdf-vm/asdf/releases/download/v0.20.2/asdf-v0.20.2-linux-amd64.tar.gz
+tar -xzf asdf.tar.gz
+sudo install -m 755 asdf /usr/local/bin/asdf
+asdf version
+# expect: v0.20.2
 ```
 
-(zsh: use `~/.zshrc`)
+Add this to `~/.bashrc` (zsh: `~/.zshrc`). Remove any old `source ~/.asdf/asdf.sh` line.
 
 ```bash
-asdf plugin add erlang
-asdf plugin add elixir
-asdf plugin add nodejs
+export PATH="${ASDF_DATA_DIR:-$HOME/.asdf}/shims:$PATH"
+. <(asdf completion bash)
+```
 
-asdf install erlang 27.3.3
-asdf install elixir 1.18.3-otp-27
-asdf install nodejs 14.21.3
+Open a new shell, then install the plugins. Versions come from `.tool-versions` (`elixir 1.18.3`, `erlang 27.3.3`, `nodejs 26.10.0`). `asdf set` writes that file. `asdf global` and `asdf local` do not exist in 0.20.
 
-asdf global erlang 27.3.3
-asdf global elixir 1.18.3-otp-27
-asdf global nodejs 14.21.3
+```bash
+asdf plugin add erlang https://github.com/asdf-vm/asdf-erlang.git
+asdf plugin add elixir https://github.com/asdf-vm/asdf-elixir.git
+asdf plugin add nodejs https://github.com/asdf-vm/asdf-nodejs.git
+asdf set erlang 27.3.3
+asdf set elixir 1.18.3
+asdf set nodejs 26.10.0
+asdf install
 ```
 
 Check:
 
 ```bash
-elixir -v   # Elixir 1.18.x, OTP 27
-node -v     # v14.x
+elixir -v
+# expect: Elixir 1.18.3 (compiled with Erlang/OTP 27)
+cat "$(asdf where erlang)/releases/27/OTP_VERSION"
+# expect: 27.3.3
+node -v
+# expect: v26.10.0
 ```
 
----
+If `node -v` prints another version, nvm is ahead of the asdf shims. `which node` must be under `~/.asdf/shims`.
 
 ## 3. Clone this branch
 
@@ -176,7 +187,7 @@ mix compile
 
 cd assets
 npm install
-NODE_OPTIONS=--openssl-legacy-provider npx webpack --mode development
+npx webpack --mode development
 cd ..
 ```
 
