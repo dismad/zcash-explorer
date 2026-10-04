@@ -99,7 +99,7 @@ defmodule ZcashExplorerWeb.VkLive do
     end
 
     cmd = MuonTrap.cmd("docker", ["logs", socket.assigns.message["container_id"]])
-    logs = elem(cmd, 0) |> Phoenix.HTML.Format.text_to_html()
+    logs = elem(cmd, 0) |> log_to_html()
 
     {:noreply,
      assign(socket, :message, %{
@@ -130,6 +130,17 @@ defmodule ZcashExplorerWeb.VkLive do
       MuonTrap.cmd("docker", ["stop", container_id])
     end
   end
+
+
+  defp log_to_html(text) when is_binary(text) do
+    text
+    |> Phoenix.HTML.html_escape()
+    |> Phoenix.HTML.safe_to_string()
+    |> String.replace(~r/\r\n|\n|\r/, "<br>")
+    |> Phoenix.HTML.raw()
+  end
+
+  defp log_to_html(_), do: ""
 
   defp disconnected?(reason) do
     case reason do
