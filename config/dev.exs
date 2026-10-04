@@ -9,7 +9,7 @@ config :zcash_explorer, ZcashExplorerWeb.Endpoint,
   live_view: [signing_salt: System.get_env("SIGNING_SALT")],
   watchers: [
     node: [
-      "node_modules/webpack/bin/webpack.js",
+      "webpack.watch.js",
       "--mode",
       "development",
       "--watch-stdin",
