@@ -593,6 +593,14 @@ defmodule ZcashExplorerWeb.CrosslinkLive do
   defp subsidy_zec(%{"value" => v}) when is_number(v), do: :erlang.float_to_binary(v * 1.0, decimals: 3)
   defp subsidy_zec(_), do: "—"
 
+  defp my_bonds_zat(%{active: active}, entry) when is_list(active) do
+    keys = MapSet.new([entry.key, entry.raw_key] |> Enum.reject(&is_nil/1) |> Enum.map(&String.downcase/1))
+    active
+    |> Enum.filter(fn b -> String.downcase(to_string(b.finalizer)) in keys end)
+    |> Enum.reduce(0, fn b, acc -> acc + (b.latest_zat || 0) end)
+  end
+  defp my_bonds_zat(_, _), do: 0
+
   defp format_stake(n) when is_number(n) do
     :erlang.float_to_binary(n * 1.0, decimals: 3)
   end
@@ -946,8 +954,15 @@ defmodule ZcashExplorerWeb.CrosslinkLive do
                 <%= if entry do %>
                   <dl class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
                     <div>
-                      <dt class="text-gray-500">Active bonds</dt>
+                      <dt class="text-gray-500">Total active bonds</dt>
                       <dd class="font-medium tabular-nums"><%= format_zat(entry.bonds_zat) %></dd>
+                    </div>
+                    <div>
+                      <dt class="text-gray-500">My bonds</dt>
+                      <dd class="font-medium tabular-nums">
+                        <%= format_zat(my_bonds_zat(@data.positions, entry)) %>
+                        <span class="text-xs text-gray-400">this node</span>
+                      </dd>
                     </div>
                     <div>
                       <dt class="text-gray-500">Reward bank</dt>
