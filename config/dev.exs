@@ -6,9 +6,8 @@ config :zcash_explorer, ZcashExplorerWeb.Endpoint,
   code_reloader: true,
   check_origin: false,
   watchers: [
-<<<<<<< HEAD
   node: [
-    "node_modules/webpack/bin/webpack.js",
+    "webpack.watch.js",
     "--mode",
     "development",
     "--watch-stdin",
@@ -18,20 +17,6 @@ config :zcash_explorer, ZcashExplorerWeb.Endpoint,
     "run",
     "watch:css",
     cd: Path.expand("../assets", __DIR__)
-=======
-    node: [
-      "webpack.watch.js",
-      "--mode",
-      "development",
-      "--watch-stdin",
-      cd: Path.expand("../assets", __DIR__)
-    ],
-    npm: [
-      "run",
-      "watch:css",
-      cd: Path.expand("../assets", __DIR__)
-    ]
->>>>>>> 65e63c3 (fix: drop webpack-cli 5 unsupported --watch-stdin)
   ]
 ]
 
