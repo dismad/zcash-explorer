@@ -16,7 +16,8 @@ config :zcash_explorer, ZcashExplorer.Repo,
 # you can enable the server option below.
 config :zcash_explorer, ZcashExplorerWeb.Endpoint,
   http: [port: 4002],
-  server: false
+  server: false,
+  secret_key_base: String.duplicate("test-secret-key-base-", 4)
 
 # Print only warnings and errors during test
 config :logger, level: :warn

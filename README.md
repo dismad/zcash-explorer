@@ -178,7 +178,9 @@ ZCASH_NETWORK=testnet
 ZCASH_RPC_COOKIE_FILE=
 ```
 
-Generate secrets:
+Generate secrets. `SECRET_KEY_BASE` must be at least 64 bytes. `openssl rand -base64 48` is exactly 64 characters.
+
+`./dev.sh` only exports `.env`. `config/dev.exs` reads `SECRET_KEY_BASE` into the endpoint. `lib/zcash_explorer_web/endpoint.ex` reads `SIGNING_SALT`. A bare `mix phx.server` does not load `.env`.
 
 ```bash
 echo "SECRET_KEY_BASE=$(openssl rand -base64 48)" > .env
@@ -326,7 +328,8 @@ Mainnet and testnet (including Crosslink feature nets) supported via `ZCASH_NETW
 | Problem | What to try |
 |---------|-------------|
 | `./dev.sh` warns about missing `.env` | Create `.env` with secrets + RPC settings |
-| `SECRET_KEY_BASE` / `SIGNING_SALT` missing | Put both in `.env` **before** starting; use `./dev.sh` or `source .env` |
+| `SECRET_KEY_BASE` / `SIGNING_SALT` missing, or `cookie store expects conn.secret_key_base` | Put both in `.env`, then start with `./dev.sh`. `config/dev.exs` reads `SECRET_KEY_BASE`. A bare `mix phx.server` skips `.env` |
+| `Mix listener expected by Phoenix.CodeReloader is missing` | `mix.exs` must include `listeners: [Phoenix.CodeReloader]` |
 | RPC connection errors | Node running? Port 8232? Cookie path empty when auth disabled? |
 | Tip link → `parse error` / bad URL | Hash must be normalized from byte array; see `Crosslink.normalize_hash/1` |
 | Tip link → `block height not in best chain` | Byte order: try with/without `Enum.reverse()` in `normalize_hash` |

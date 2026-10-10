@@ -1,10 +1,21 @@
 import Config
 
+secret_key_base =
+  case System.get_env("SECRET_KEY_BASE") do
+    v when is_binary(v) and v != "" -> v
+    _ ->
+      raise """
+      SECRET_KEY_BASE is missing.
+      Add it to .env (openssl rand -base64 48) and start with ./dev.sh
+      """
+  end
+
 config :zcash_explorer, ZcashExplorerWeb.Endpoint,
   http: [ip: {127, 0, 0, 1}, port: 4000],
   debug_errors: true,
   code_reloader: true,
   check_origin: false,
+  secret_key_base: secret_key_base,
   watchers: [
   node: [
     "webpack.watch.js",

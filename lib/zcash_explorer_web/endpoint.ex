@@ -8,11 +8,17 @@ defmodule ZcashExplorerWeb.Endpoint do
     store: :cookie,
     key: "_zcash_explorer_key",
     # signing_salt is now loaded from .env (never commit secrets to git)
-    signing_salt: System.get_env("SIGNING_SALT") ||
-                  raise """
-                  environment variable SIGNING_SALT is missing.
-                  You must create a .env file or set SIGNING_SALT.
-                  """
+    signing_salt:
+      case System.get_env("SIGNING_SALT") do
+        v when is_binary(v) and v != "" ->
+          v
+
+        _ ->
+          raise """
+          environment variable SIGNING_SALT is missing.
+          Add it to .env and start with ./dev.sh
+          """
+      end
   ]
 
   socket "/socket", ZcashExplorerWeb.UserSocket,
