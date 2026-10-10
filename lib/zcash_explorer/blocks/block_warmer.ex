@@ -20,9 +20,12 @@ defmodule ZcashExplorer.Blocks.BlockWarmer do
         blocks =
           Enum.to_list(start_height..n)
           |> Enum.map(fn x ->
-            {:ok, block} = Zcashex.getblock(x, 2)
-            block
+            case Zcashex.getblock(Integer.to_string(x), 2) do
+              {:ok, block} when is_map(block) -> block
+              _ -> nil
+            end
           end)
+          |> Enum.reject(&is_nil/1)
 
         blocks
         |> Enum.map(fn x ->
