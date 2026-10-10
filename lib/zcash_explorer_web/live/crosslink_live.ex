@@ -551,8 +551,8 @@ defmodule ZcashExplorerWeb.CrosslinkLive do
 
   defp format_pool(_), do: "—"
 
-  defp format_zat(n) when is_number(n) and n > 0 do
-    :erlang.float_to_binary(n / 1.0e8, decimals: 3) <> " cTAZ"
+  defp format_zat(n) when is_number(n) and n >= 0 do
+    :erlang.float_to_binary(n / 1.0e8, decimals: 3)
   end
 
   defp format_zat(_), do: "—"
@@ -801,8 +801,9 @@ defmodule ZcashExplorerWeb.CrosslinkLive do
                   <dt class="text-gray-500 dark:text-gray-400">Online stake</dt>
                   <dd class="font-medium tabular-nums">
                     <%= if @data.sunburst do %>
-                      <span class="text-emerald-500">
+                      <span class={if(@data.sunburst.stalled or (@data.lag && @data.lag > 20), do: "text-rose-500", else: "text-emerald-500")}>
                         <%= :erlang.float_to_binary(@data.sunburst.online_pct, decimals: 1) %>%
+                        <%= if @data.sunburst.stalled or (@data.lag && @data.lag > 20), do: " stalled" %>
                       </span>
                     <% else %>
                       —
@@ -1081,13 +1082,16 @@ defmodule ZcashExplorerWeb.CrosslinkLive do
                                     ></div>
                                   <% end %>
                                 </div>
-                                <span class="font-mono text-[11px] sm:text-xs text-gray-800 dark:text-gray-200 break-all leading-snug flex-1 text-center">
-                                  <%= entry.key %>
-                                  <%= if entry.raw_key && entry.raw_key != entry.key do %>
-                                    <span class="block text-[10px] text-gray-400" title="raw pubkey, first 32 bytes of zfinv1"><%= entry.raw_key %></span>
-                                  <% end %>
+                                <span class="font-mono text-xs text-gray-800 dark:text-gray-200" title={"reversed #{entry.key}#{if entry.raw_key, do: " / raw #{entry.raw_key}", else: ""}"}>
+                                  <%= short_key(entry.key) %>
                                 </span>
                               </div>
+                            </td>
+                            <td class="px-3 sm:px-5 py-3 text-right tabular-nums align-middle whitespace-nowrap">
+                              <%= format_zat(Map.get(entry, :bonds_zat, 0)) %>
+                            </td>
+                            <td class="px-3 sm:px-5 py-3 text-right tabular-nums text-amber-600 dark:text-amber-400 align-middle whitespace-nowrap">
+                              <%= format_zat(Map.get(entry, :reward_zat, 0)) %>
                             </td>
                             <td class="px-3 sm:px-5 py-3 text-right tabular-nums font-medium align-middle whitespace-nowrap">
                               <%= format_stake(entry.stake) %>
