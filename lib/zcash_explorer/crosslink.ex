@@ -65,6 +65,15 @@ defmodule ZcashExplorer.Crosslink do
     call(method, [], 15_000)
   end
 
+  # Same as roster(:zats), but finalizer_address is the zfinv1 string when the node knows it.
+  # Falls back to the plain roster on a node that does not have this method yet.
+  def roster_with_addresses do
+    case call("get_tfl_roster_with_addresses", [], 15_000) do
+      {:ok, list} when is_list(list) -> {:ok, list}
+      _ -> roster(:zats)
+    end
+  end
+
   # Reward bank in zats. Key is the raw 32-byte finalizer pubkey, same bytes as the roster.
   def reward_balance(raw_hex) when is_binary(raw_hex) do
     case call("getfinalizerrewardbalance", [raw_hex]) do

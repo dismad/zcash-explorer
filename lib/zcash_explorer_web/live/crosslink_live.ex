@@ -83,7 +83,7 @@ defmodule ZcashExplorerWeb.CrosslinkLive do
       end
 
     roster =
-      case ZcashExplorer.Crosslink.roster(:zats) do
+      case ZcashExplorer.Crosslink.roster_with_addresses() do
         {:ok, list} when is_list(list) ->
           list
           |> Enum.map(&normalize_roster_entry/1)
