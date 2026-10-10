@@ -192,6 +192,23 @@ defmodule ZcashExplorer.Crosslink do
 
   def pubkey_forms(_), do: %{raw: nil, display: nil}
 
+  @zfinv_prefix "zfinv1"
+
+  # zfinv1 is 32-byte raw pubkey then 64-byte signature, base64url, no padding.
+  # The roster display key is that pubkey reversed (PubKeyID). Return both.
+  def decode_finalizer_address(@zfinv_prefix <> rest) when byte_size(rest) == 128 do
+    case Base.url_decode64(rest, padding: false) do
+      {:ok, <<pk::binary-size(32), _sig::binary-size(64)>>} ->
+        raw = Base.encode16(pk, case: :lower)
+        %{raw: raw, display: reverse_pk(raw)}
+
+      _ ->
+        nil
+    end
+  end
+
+  def decode_finalizer_address(_), do: nil
+
   defp call(method, params \\ [], timeout \\ @default_timeout) do
     try do
       GenServer.call(Zcashex, {:call_endpoint, method, params}, timeout)

@@ -204,12 +204,23 @@ defmodule ZcashExplorerWeb.CrosslinkLive do
 
   defp online?(nil), do: false
 
+  # no_yes_votes_in_my_height is a 2x2 matrix [[nil, yes]_prevote, [nil, yes]_precommit].
+  # It is always present, so a non-empty list is not a vote. Sum the four counts.
   defp online?(status) when is_map(status) do
     case status["no_yes_votes_in_my_height"] do
-      votes when is_list(votes) and votes != [] -> true
+      [[a, b], [c, d]] -> vote_count(a) + vote_count(b) + vote_count(c) + vote_count(d) > 0
+      rows when is_list(rows) ->
+        Enum.any?(rows, fn
+          [x, y] -> vote_count(x) + vote_count(y) > 0
+          n -> vote_count(n) > 0
+        end)
       _ -> false
     end
   end
+
+  defp vote_count(n) when is_integer(n), do: n
+  defp vote_count(n) when is_float(n), do: trunc(n)
+  defp vote_count(_), do: 0
 
   defp build_sunburst([], _), do: nil
 
@@ -273,11 +284,13 @@ defmodule ZcashExplorerWeb.CrosslinkLive do
           }
         end)
 
+      online_pct = online_stake / total * 100
       %{
         total: total,
         online_stake: online_stake,
         offline_stake: offline_stake,
-        online_pct: online_stake / total * 100,
+        online_pct: online_pct,
+        stalled: online_pct < 66.7,
         inner: inner,
         outer: outer_online ++ outer_offline
       }
@@ -752,7 +765,7 @@ defmodule ZcashExplorerWeb.CrosslinkLive do
                 </div>
                 <div class="flex justify-between">
                   <dt class="text-gray-500 dark:text-gray-400">Active roster</dt>
-                  <dd class="font-medium tabular-nums"><%= length(@data.roster) %> / <%= @active_roster_max %></dd>
+                  <dd class="font-medium tabular-nums"><%= Enum.count(@data.roster, & &1.active) %> / <%= @active_roster_max %></dd>
                 </div>
                 <div class="flex justify-between">
                   <dt class="text-gray-500 dark:text-gray-400">Heard from</dt>
@@ -870,7 +883,7 @@ defmodule ZcashExplorerWeb.CrosslinkLive do
                 <span class="font-semibold">
                   Finalizer Roster
                   <span class="ml-2 text-sm font-normal text-gray-500">
-                    (<%= length(@data.roster) %>/<%= @active_roster_max %> active · <%= format_stake(@data.total_stake) %> cTAZ)
+                    (<%= Enum.count(@data.roster, & &1.active) %>/<%= @active_roster_max %> active · <%= format_stake(@data.total_stake) %> cTAZ)
                   </span>
                 </span>
               </button>
@@ -951,8 +964,12 @@ defmodule ZcashExplorerWeb.CrosslinkLive do
                         <text x={cx} y={cy + 10} text-anchor="middle" fill="#9ca3af" font-size="10">
                           cTAZ total
                         </text>
-                        <text x={cx} y={cy + 26} text-anchor="middle" fill="#34d399" font-size="11" font-weight="600">
-                          <%= :erlang.float_to_binary(sb.online_pct, decimals: 1) %>% online
+                        <text x={cx} y={cy + 26} text-anchor="middle" fill={if(sb.stalled or (@data.lag && @data.lag > 20), do: "#f43f5e", else: "#34d399")} font-size="11" font-weight="600">
+                          <%= if sb.stalled or (@data.lag && @data.lag > 20) do %>
+                            STALLED
+                          <% else %>
+                            <%= :erlang.float_to_binary(sb.online_pct, decimals: 1) %>% online
+                          <% end %>
                         </text>
                       </svg>
                     </div>
@@ -969,6 +986,12 @@ defmodule ZcashExplorerWeb.CrosslinkLive do
                           Outer ring: each finalizer’s share of roster stake.
                           Gold dashed lines mark <strong>⅓</strong> and <strong>⅔</strong>
                           (stall / supermajority).
+                          <%= if sb.stalled or (@data.lag && @data.lag > 20) do %>
+                            <span class="block mt-1 text-rose-500 font-medium">
+                              BFT stalled<%= if @data.lag do %>: finalized tip lags <%= @data.lag %> blocks<% end %>.
+                              Online stake of the roster is <%= :erlang.float_to_binary(sb.online_pct, decimals: 1) %>%.
+                            </span>
+                          <% end %>
                         </p>
                       </div>
                       <dl class="space-y-1">
@@ -1032,6 +1055,9 @@ defmodule ZcashExplorerWeb.CrosslinkLive do
                                 </div>
                                 <span class="font-mono text-[11px] sm:text-xs text-gray-800 dark:text-gray-200 break-all leading-snug flex-1 text-center">
                                   <%= entry.key %>
+                                  <%= if entry.raw_key && entry.raw_key != entry.key do %>
+                                    <span class="block text-[10px] text-gray-400" title="raw pubkey, first 32 bytes of zfinv1"><%= entry.raw_key %></span>
+                                  <% end %>
                                 </span>
                               </div>
                             </td>
