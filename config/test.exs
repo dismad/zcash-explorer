@@ -17,7 +17,8 @@ config :zcash_explorer, ZcashExplorer.Repo,
 config :zcash_explorer, ZcashExplorerWeb.Endpoint,
   http: [port: 4002],
   server: false,
-  secret_key_base: String.duplicate("test-secret-key-base-", 4)
+  secret_key_base: String.duplicate("test-secret-key-base-", 4),
+  live_view: [signing_salt: "test-live-salt"]
 
 # Print only warnings and errors during test
 config :logger, level: :warn

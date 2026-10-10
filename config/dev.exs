@@ -16,6 +16,7 @@ config :zcash_explorer, ZcashExplorerWeb.Endpoint,
   code_reloader: true,
   check_origin: false,
   secret_key_base: secret_key_base,
+  live_view: [signing_salt: secret_key_base |> String.slice(0, 16)],
   watchers: [
   node: [
     "webpack.watch.js",

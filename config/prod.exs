@@ -18,7 +18,8 @@ secret_key_base =
 config :zcash_explorer, ZcashExplorerWeb.Endpoint,
   url: [host: "example.com", port: 80],
   cache_static_manifest: "priv/static/cache_manifest.json",
-  secret_key_base: secret_key_base
+  secret_key_base: secret_key_base,
+  live_view: [signing_salt: secret_key_base |> String.slice(0, 16)]
 
 # Do not print debug messages in production
 config :logger, level: :info
