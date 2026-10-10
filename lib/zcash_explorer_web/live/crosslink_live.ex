@@ -390,7 +390,7 @@ defmodule ZcashExplorerWeb.CrosslinkLive do
     |> Map.put(String.downcase(key), status)
   end
 
-  defp normalize_roster_entry(%{"pub_key" => k, "voting_power" => v}) do
+  defp normalize_roster_entry(%{"pub_key" => k, "voting_power" => v} = entry) do
     forms = ZcashExplorer.Crosslink.pubkey_forms(k)
     voting_zat = to_zat(v)
     reward_zat = if(forms.raw, do: ZcashExplorer.Crosslink.reward_balance(forms.raw), else: 0)
@@ -399,6 +399,7 @@ defmodule ZcashExplorerWeb.CrosslinkLive do
     %{
       key: forms.display,
       raw_key: forms.raw,
+      zfinv: zfinv_of(entry["finalizer_address"]),
       stake: voting_zat / 1.0e8,
       voting_zat: voting_zat,
       reward_zat: reward_zat,
@@ -409,10 +410,18 @@ defmodule ZcashExplorerWeb.CrosslinkLive do
 
   defp normalize_roster_entry([k, v]) do
     forms = ZcashExplorer.Crosslink.pubkey_forms(to_string(k))
-    %{key: forms.display, raw_key: forms.raw, stake: to_float(v), voting_zat: 0, reward_zat: 0, bonds_zat: 0, active: true}
+    %{key: forms.display, raw_key: forms.raw, zfinv: nil, stake: to_float(v), voting_zat: 0, reward_zat: 0, bonds_zat: 0, active: true}
   end
 
-  defp normalize_roster_entry(other), do: %{key: inspect(other), raw_key: nil, stake: 0.0, voting_zat: 0, reward_zat: 0, bonds_zat: 0, active: false}
+  defp normalize_roster_entry(other), do: %{key: inspect(other), raw_key: nil, zfinv: nil, stake: 0.0, voting_zat: 0, reward_zat: 0, bonds_zat: 0, active: false}
+
+  defp zfinv_of("zfinv1" <> _ = s) when byte_size(s) == 134, do: s
+  defp zfinv_of(_), do: nil
+
+  defp short_zfinv("zfinv1" <> rest) when byte_size(rest) >= 20 do
+    "zfinv1" <> String.slice(rest, 0, 10) <> ".." <> String.slice(rest, -10, 10)
+  end
+  defp short_zfinv(_), do: nil
 
   defp to_zat(v) when is_integer(v), do: v
   defp to_zat(v) when is_float(v), do: trunc(v)
@@ -534,6 +543,19 @@ defmodule ZcashExplorerWeb.CrosslinkLive do
   end
 
   defp staking_day_pct(_), do: 0
+
+  defp fmt_utc(n) when is_integer(n) and n > 0 do
+    case DateTime.from_unix(n) do
+      {:ok, dt} -> Calendar.strftime(dt, "%Y-%m-%d %H:%M:%S UTC")
+      _ -> Integer.to_string(n)
+    end
+  end
+  defp fmt_utc(_), do: "—"
+
+  defp vote_summary([[pn, py], [cn, cy]]) do
+    "prevote nil #{vote_count(pn)}, yes #{vote_count(py)} · precommit nil #{vote_count(cn)}, yes #{vote_count(cy)}"
+  end
+  defp vote_summary(_), do: "—"
 
   defp format_stake(n) when is_number(n) do
     :erlang.float_to_binary(n * 1.0, decimals: 3)
@@ -862,15 +884,38 @@ defmodule ZcashExplorerWeb.CrosslinkLive do
                 </div>
                 <span class="text-gray-400 text-sm shrink-0">Close ✕</span>
               </button>
-              <div class="px-5 pb-5">
-                <div class="font-mono text-xs break-all text-gray-600 dark:text-gray-300 mb-3">
-                  <%= @selected_finalizer %>
-                </div>
-                <dl class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-                  <div>
-                    <dt class="text-gray-500">Highest round vote</dt>
-                    <dd class="font-medium"><%= status && status["highest_round_vote"] || "—" %></dd>
+              <div class="px-5 pb-5 space-y-4">
+                <% entry = Enum.find(@data.roster, &(&1.key == @selected_finalizer)) %>
+                <div>
+                  <div class="text-xs text-gray-500 mb-1">zfinv1</div>
+                  <div class="font-mono text-xs break-all text-gray-800 dark:text-gray-200">
+                    <%= (entry && entry.zfinv) || "Not in roster response. The node did not return a signed finalizer address." %>
                   </div>
+                  <div class="mt-1 font-mono text-[10px] text-gray-400 break-all" title="reversed pubkey"><%= @selected_finalizer %></div>
+                </div>
+                <%= if entry do %>
+                  <dl class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+                    <div>
+                      <dt class="text-gray-500">Active bonds</dt>
+                      <dd class="font-medium tabular-nums"><%= format_zat(entry.bonds_zat) %></dd>
+                    </div>
+                    <div>
+                      <dt class="text-gray-500">Reward bank</dt>
+                      <dd class="font-medium tabular-nums text-amber-600"><%= format_zat(entry.reward_zat) %></dd>
+                    </div>
+                    <div>
+                      <dt class="text-gray-500">Voting power</dt>
+                      <dd class="font-medium tabular-nums"><%= format_stake(entry.stake) %></dd>
+                    </div>
+                    <div>
+                      <dt class="text-gray-500">Commission share</dt>
+                      <dd class="font-medium tabular-nums text-emerald-600">
+                        <%= if entry.active, do: :erlang.float_to_binary(entry.commission_share * 100, decimals: 2) <> "%", else: "inactive" %>
+                      </dd>
+                    </div>
+                  </dl>
+                <% end %>
+                <dl class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
                   <div>
                     <dt class="text-gray-500">Voted at latest height</dt>
                     <dd class="font-medium">
@@ -882,18 +927,20 @@ defmodule ZcashExplorerWeb.CrosslinkLive do
                     </dd>
                   </div>
                   <div>
-                    <dt class="text-gray-500">Last direct connection (utc)</dt>
-                    <dd class="font-medium tabular-nums"><%= status && status["last_direct_connection_utc"] || "—" %></dd>
+                    <dt class="text-gray-500">Highest round vote</dt>
+                    <dd class="font-medium"><%= status && status["highest_round_vote"] || "—" %></dd>
                   </div>
                   <div>
-                    <dt class="text-gray-500">Last seen new info (utc)</dt>
-                    <dd class="font-medium tabular-nums"><%= status && status["last_seen_new_info_utc"] || "—" %></dd>
+                    <dt class="text-gray-500">Last direct connection</dt>
+                    <dd class="font-medium tabular-nums"><%= fmt_utc(status && status["last_direct_connection_utc"]) %></dd>
+                  </div>
+                  <div>
+                    <dt class="text-gray-500">Last seen new info</dt>
+                    <dd class="font-medium tabular-nums"><%= fmt_utc(status && status["last_seen_new_info_utc"]) %></dd>
                   </div>
                   <div class="sm:col-span-2">
-                    <dt class="text-gray-500 mb-1">Votes in my height</dt>
-                    <dd class="font-mono text-xs bg-gray-50 dark:bg-gray-900 p-2 rounded overflow-x-auto">
-                      <%= inspect(status && status["no_yes_votes_in_my_height"]) %>
-                    </dd>
+                    <dt class="text-gray-500 mb-1">Votes at this height</dt>
+                    <dd class="text-xs text-gray-600 dark:text-gray-300"><%= vote_summary(status && status["no_yes_votes_in_my_height"]) %></dd>
                   </div>
                 </dl>
               </div>
@@ -1082,9 +1129,12 @@ defmodule ZcashExplorerWeb.CrosslinkLive do
                                     ></div>
                                   <% end %>
                                 </div>
-                                <span class="font-mono text-xs text-gray-800 dark:text-gray-200" title={"reversed #{entry.key}#{if entry.raw_key, do: " / raw #{entry.raw_key}", else: ""}"}>
-                                  <%= short_key(entry.key) %>
-                                </span>
+                                <div class="min-w-0">
+                                  <div class="font-mono text-xs text-gray-800 dark:text-gray-200" title={entry.zfinv || entry.key}>
+                                    <%= short_zfinv(entry.zfinv) || short_key(entry.key) %>
+                                  </div>
+                                  <div class="font-mono text-[10px] text-gray-400" title={entry.key}><%= short_key(entry.key) %></div>
+                                </div>
                               </div>
                             </td>
                             <td class="px-3 sm:px-5 py-3 text-right tabular-nums align-middle whitespace-nowrap">
