@@ -65,6 +65,15 @@ defmodule ZcashExplorer.Crosslink do
     call(method, [], 15_000)
   end
 
+  # Reward bank in zats. Key is the raw 32-byte finalizer pubkey, same bytes as the roster.
+  def reward_balance(raw_hex) when is_binary(raw_hex) do
+    case call("get_finalizer_reward_balance", [raw_hex]) do
+      {:ok, n} when is_integer(n) -> n
+      {:ok, n} when is_float(n) -> trunc(n)
+      _ -> 0
+    end
+  end
+
   def staking_positions do
     call("wallet_staking_positions", [], 15_000)
   end

@@ -83,7 +83,7 @@ defmodule ZcashExplorerWeb.CrosslinkLive do
       end
 
     roster =
-      case ZcashExplorer.Crosslink.roster(:zec) do
+      case ZcashExplorer.Crosslink.roster(:zats) do
         {:ok, list} when is_list(list) ->
           list
           |> Enum.map(&normalize_roster_entry/1)
@@ -392,15 +392,37 @@ defmodule ZcashExplorerWeb.CrosslinkLive do
 
   defp normalize_roster_entry(%{"pub_key" => k, "voting_power" => v}) do
     forms = ZcashExplorer.Crosslink.pubkey_forms(k)
-    %{key: forms.display, raw_key: forms.raw, stake: to_float(v), active: true}
+    voting_zat = to_zat(v)
+    reward_zat = if(forms.raw, do: ZcashExplorer.Crosslink.reward_balance(forms.raw), else: 0)
+    bonds_zat = max(voting_zat - reward_zat, 0)
+
+    %{
+      key: forms.display,
+      raw_key: forms.raw,
+      stake: voting_zat / 1.0e8,
+      voting_zat: voting_zat,
+      reward_zat: reward_zat,
+      bonds_zat: bonds_zat,
+      active: true
+    }
   end
 
   defp normalize_roster_entry([k, v]) do
     forms = ZcashExplorer.Crosslink.pubkey_forms(to_string(k))
-    %{key: forms.display, raw_key: forms.raw, stake: to_float(v), active: true}
+    %{key: forms.display, raw_key: forms.raw, stake: to_float(v), voting_zat: 0, reward_zat: 0, bonds_zat: 0, active: true}
   end
 
-  defp normalize_roster_entry(other), do: %{key: inspect(other), raw_key: nil, stake: 0.0, active: false}
+  defp normalize_roster_entry(other), do: %{key: inspect(other), raw_key: nil, stake: 0.0, voting_zat: 0, reward_zat: 0, bonds_zat: 0, active: false}
+
+  defp to_zat(v) when is_integer(v), do: v
+  defp to_zat(v) when is_float(v), do: trunc(v)
+  defp to_zat(v) when is_binary(v) do
+    case Integer.parse(v) do
+      {n, _} -> n
+      _ -> 0
+    end
+  end
+  defp to_zat(_), do: 0
 
   defp annotate_roster(roster) do
     active_stake =
@@ -883,10 +905,14 @@ defmodule ZcashExplorerWeb.CrosslinkLive do
                 <span class="font-semibold">
                   Finalizer Roster
                   <span class="ml-2 text-sm font-normal text-gray-500">
-                    (<%= Enum.count(@data.roster, & &1.active) %>/<%= @active_roster_max %> active · <%= format_stake(@data.total_stake) %> cTAZ)
+                    (<%= Enum.count(@data.roster, & &1.active) %>/<%= @active_roster_max %> active · <%= format_stake(@data.total_stake) %> cTAZ voting power)
                   </span>
                 </span>
               </button>
+              <p class="w-full text-xs text-gray-500">
+                Voting power is active bonds plus the reward bank. A finalizer has no transparent address:
+                the identity is the ed25519 key, and this value is in the shielded staking pool.
+              </p>
               <div class="flex items-center gap-2">
                 <div class="inline-flex rounded-lg border border-gray-200 dark:border-gray-600 overflow-hidden text-xs">
                   <button
@@ -1026,7 +1052,9 @@ defmodule ZcashExplorerWeb.CrosslinkLive do
                         <tr>
                           <th class="text-left px-3 sm:px-5 py-3 font-medium w-14">#</th>
                           <th class="text-left px-3 sm:px-5 py-3 font-medium">Finalizer</th>
-                          <th class="text-right px-3 sm:px-5 py-3 font-medium whitespace-nowrap">Stake (cTAZ)</th>
+                          <th class="text-right px-3 sm:px-5 py-3 font-medium whitespace-nowrap">Active bonds</th>
+                          <th class="text-right px-3 sm:px-5 py-3 font-medium whitespace-nowrap">Reward bank</th>
+                          <th class="text-right px-3 sm:px-5 py-3 font-medium whitespace-nowrap">Voting power</th>
                           <th class="text-right px-3 sm:px-5 py-3 font-medium w-28 sm:w-36">Share</th>
                           <th class="text-right px-3 sm:px-5 py-3 font-medium whitespace-nowrap">Commission</th>
                         </tr>
