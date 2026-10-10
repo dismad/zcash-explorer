@@ -130,6 +130,25 @@ defmodule ZcashExplorerWeb.CrosslinkLive do
         _ -> nil
       end
 
+    signers =
+      case ZcashExplorer.Crosslink.fat_pointer() do
+        {:ok, %{"signatures" => sigs}} when is_list(sigs) ->
+          Enum.map(sigs, fn
+            %{"pub_key" => k} -> ZcashExplorer.Crosslink.pubkey_forms(k).display
+            _ -> nil
+          end)
+          |> Enum.reject(&is_nil/1)
+
+        _ ->
+          []
+      end
+
+    subsidy =
+      case ZcashExplorer.Crosslink.block_subsidy() do
+        {:ok, s} when is_map(s) -> s
+        _ -> nil
+      end
+
     difficulty =
       case ZcashExplorer.Crosslink.blockchain_info() do
         {:ok, %{"difficulty" => d}} when is_number(d) ->
@@ -195,6 +214,8 @@ defmodule ZcashExplorerWeb.CrosslinkLive do
       staking: staking,
       positions: positions,
       recency: recency,
+      signers: signers,
+      subsidy: subsidy,
       finalizer_status_map: finalizer_status_map,
       sunburst: sunburst
     }
@@ -400,6 +421,7 @@ defmodule ZcashExplorerWeb.CrosslinkLive do
       key: forms.display,
       raw_key: forms.raw,
       zfinv: zfinv_of(entry["finalizer_address"]),
+      bonds: bond_txids(entry["txids"]),
       stake: voting_zat / 1.0e8,
       voting_zat: voting_zat,
       reward_zat: reward_zat,
@@ -410,10 +432,19 @@ defmodule ZcashExplorerWeb.CrosslinkLive do
 
   defp normalize_roster_entry([k, v]) do
     forms = ZcashExplorer.Crosslink.pubkey_forms(to_string(k))
-    %{key: forms.display, raw_key: forms.raw, zfinv: nil, stake: to_float(v), voting_zat: 0, reward_zat: 0, bonds_zat: 0, active: true}
+    %{key: forms.display, raw_key: forms.raw, zfinv: nil, bonds: [], stake: to_float(v), voting_zat: 0, reward_zat: 0, bonds_zat: 0, active: true}
   end
 
-  defp normalize_roster_entry(other), do: %{key: inspect(other), raw_key: nil, zfinv: nil, stake: 0.0, voting_zat: 0, reward_zat: 0, bonds_zat: 0, active: false}
+  defp normalize_roster_entry(other), do: %{key: inspect(other), raw_key: nil, zfinv: nil, bonds: [], stake: 0.0, voting_zat: 0, reward_zat: 0, bonds_zat: 0, active: false}
+
+  defp bond_txids(list) when is_list(list) do
+    Enum.map(list, fn
+      %{"txid" => txid, "zats" => z} -> %{txid: to_string(txid), zats: to_zat(z)}
+      _ -> nil
+    end)
+    |> Enum.reject(&is_nil/1)
+  end
+  defp bond_txids(_), do: []
 
   defp zfinv_of("zfinv1" <> _ = s) when byte_size(s) == 134, do: s
   defp zfinv_of(_), do: nil
@@ -556,6 +587,11 @@ defmodule ZcashExplorerWeb.CrosslinkLive do
     "prevote nil #{vote_count(pn)}, yes #{vote_count(py)} · precommit nil #{vote_count(cn)}, yes #{vote_count(cy)}"
   end
   defp vote_summary(_), do: "—"
+
+  defp subsidy_zec(n) when is_number(n), do: :erlang.float_to_binary(n / 1.0e8, decimals: 3)
+  defp subsidy_zec(%{"zat" => z}) when is_number(z), do: subsidy_zec(z)
+  defp subsidy_zec(%{"value" => v}) when is_number(v), do: :erlang.float_to_binary(v * 1.0, decimals: 3)
+  defp subsidy_zec(_), do: "—"
 
   defp format_stake(n) when is_number(n) do
     :erlang.float_to_binary(n * 1.0, decimals: 3)
@@ -816,6 +852,20 @@ defmodule ZcashExplorerWeb.CrosslinkLive do
                   <dd class="font-medium tabular-nums"><%= @data.finalizer_count %></dd>
                 </div>
                 <div class="flex justify-between">
+                  <dt class="text-gray-500 dark:text-gray-400">Fat pointer</dt>
+                  <dd class="font-medium tabular-nums"><%= length(@data.signers) %> sigs</dd>
+                </div>
+                <div class="flex justify-between">
+                  <dt class="text-gray-500 dark:text-gray-400">Subsidy</dt>
+                  <dd class="font-medium tabular-nums text-xs">
+                    <%= if @data.subsidy do %>
+                      miner <%= subsidy_zec(@data.subsidy["miner"]) %> · total <%= subsidy_zec(@data.subsidy["total_block_subsidy"] || @data.subsidy["totalblocksubsidy"]) %>
+                    <% else %>
+                      —
+                    <% end %>
+                  </dd>
+                </div>
+                <div class="flex justify-between">
                   <dt class="text-gray-500 dark:text-gray-400">Commission</dt>
                   <dd class="font-medium tabular-nums">10% active · 90% bonds</dd>
                 </div>
@@ -938,6 +988,19 @@ defmodule ZcashExplorerWeb.CrosslinkLive do
                     <dt class="text-gray-500">Last seen new info</dt>
                     <dd class="font-medium tabular-nums"><%= fmt_utc(status && status["last_seen_new_info_utc"]) %></dd>
                   </div>
+                  <%= if entry && entry.bonds != [] do %>
+                    <div class="sm:col-span-2">
+                      <dt class="text-gray-500 mb-1">Bonds</dt>
+                      <dd class="space-y-1">
+                        <%= for bond <- entry.bonds do %>
+                          <div class="font-mono text-[11px] flex justify-between gap-3">
+                            <span class="truncate" title={bond.txid}><%= short_key(bond.txid) %></span>
+                            <span class="tabular-nums"><%= format_zat(bond.zats) %></span>
+                          </div>
+                        <% end %>
+                      </dd>
+                    </div>
+                  <% end %>
                   <div class="sm:col-span-2">
                     <dt class="text-gray-500 mb-1">Votes at this height</dt>
                     <dd class="text-xs text-gray-600 dark:text-gray-300"><%= vote_summary(status && status["no_yes_votes_in_my_height"]) %></dd>
@@ -1118,6 +1181,9 @@ defmodule ZcashExplorerWeb.CrosslinkLive do
                             <td class="px-3 sm:px-5 py-3 text-gray-400 tabular-nums align-middle whitespace-nowrap">
                               <span class={"inline-block w-2 h-2 rounded-full mr-1.5 " <> liveness_dot(status)}></span>
                               <%= idx %>
+                              <%= if entry.key in @data.signers do %>
+                                <span class="ml-1 text-[10px] text-blue-500" title="signed the fat pointer">sig</span>
+                              <% end %>
                             </td>
                             <td class="px-3 sm:px-5 py-3 align-middle">
                               <div class="flex items-center gap-3 min-w-0">

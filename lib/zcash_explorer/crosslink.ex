@@ -74,6 +74,19 @@ defmodule ZcashExplorer.Crosslink do
     end
   end
 
+  def fat_pointer do
+    call("get_tfl_fat_pointer_to_bft_chain_tip", [], 15_000)
+  end
+
+  def bond_info(bond_key) when is_binary(bond_key) do
+    call("getbondinfo", [bond_key])
+  end
+
+  def block_subsidy(height \\ nil) do
+    params = if is_integer(height), do: [height], else: []
+    call("getblocksubsidy", params)
+  end
+
   def staking_positions do
     call("wallet_staking_positions", [], 15_000)
   end
