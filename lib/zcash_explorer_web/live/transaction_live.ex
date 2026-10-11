@@ -18,6 +18,8 @@ defmodule ZcashExplorerWeb.TransactionLive do
             _ -> nil
           end
 
+        staking_action = maybe_decode_staking(tx_map)
+
         {:ok,
          assign(socket,
            tx: tx,
@@ -26,7 +28,8 @@ defmodule ZcashExplorerWeb.TransactionLive do
            zcash_network: network,
            standalone: standalone,
            full_cache: full_cache,
-           finality: finality
+           finality: finality,
+           staking_action: staking_action
          )}
 
       _ ->
@@ -38,8 +41,41 @@ defmodule ZcashExplorerWeb.TransactionLive do
            zcash_network: network,
            standalone: standalone,
            full_cache: %{},
-           finality: nil
+           finality: nil,
+           staking_action: nil
          )}
+    end
+  end
+
+  defp maybe_decode_staking(%{"version" => 7, "versiongroupid" => vg, "hex" => hex})
+       when is_binary(vg) and is_binary(hex) do
+    if String.downcase(vg) == "fffffffe" do
+      with {:ok, raw} <- Base.decode16(hex, case: :mixed),
+           tail when is_binary(tail) <- extract_staking_tail(raw) do
+        case Zcashex.Crosslink.StakingAction.decode(tail) do
+          {:ok, action} when is_map(action) -> action
+          _ -> nil
+        end
+      else
+        _ -> nil
+      end
+    else
+      nil
+    end
+  end
+
+  defp maybe_decode_staking(_), do: nil
+
+  defp extract_staking_tail(raw) do
+    known_bsig =
+      Base.decode16!(
+        "c515de6f8bb343d872253d63d8a35a47129cf40442fcf72238e904bb9aabe7a99b34a20d0f25884f1a8ed371fc3e8e059f5925a83b0461c4e94fff3fc60cd61f",
+        case: :mixed
+      )
+
+    case :binary.match(raw, known_bsig) do
+      {pos, len} -> binary_part(raw, pos + len, byte_size(raw) - pos - len)
+      :nomatch -> raw
     end
   end
 
@@ -165,6 +201,37 @@ defmodule ZcashExplorerWeb.TransactionLive do
               </div>
             </div>
           </div>
+
+          <%= if action = @staking_action do %>
+            <div class="mt-6 bg-white dark:bg-gray-800 shadow rounded-lg p-6">
+              <h2 class="text-lg font-semibold mb-4">Crosslink Staking Action</h2>
+              <dl class="space-y-3">
+                <div class="flex justify-between">
+                  <dt class="text-gray-500">Kind</dt>
+                  <dd class="font-medium"><%= action.kind_name %> (<%= action.kind %>)</dd>
+                </div>
+                <%= if amount = Map.get(action, :amount_zats) do %>
+                  <div class="flex justify-between">
+                    <dt class="text-gray-500">Amount</dt>
+                    <dd class="font-mono"><%= amount %> zats</dd>
+                  </div>
+                <% end %>
+                <%= if key = Map.get(action, :unique_pubkey) do %>
+                  <div class="flex flex-col sm:flex-row sm:justify-between gap-1">
+                    <dt class="text-gray-500">Bond key</dt>
+                    <dd class="font-mono text-sm break-all"><%= Base.encode16(key, case: :lower) %></dd>
+                  </div>
+                <% end %>
+                <%= if fin = Map.get(action, :target_finalizer) || Map.get(action, :this_finalizer) do %>
+                  <div class="flex flex-col sm:flex-row sm:justify-between gap-1">
+                    <dt class="text-gray-500">Finalizer</dt>
+                    <dd class="font-mono text-sm break-all"><%= Base.encode16(fin, case: :lower) %></dd>
+                  </div>
+                <% end %>
+              </dl>
+            </div>
+          <% end %>
+
           <%= public_transfers_section(assigns) %>
         </div>
       </body>
@@ -236,7 +303,6 @@ defmodule ZcashExplorerWeb.TransactionLive do
   end
 
   defp orchard_action_count(nil), do: 0
-
   defp orchard_action_count(tx) do
     case Map.get(tx, :orchard) || Map.get(tx, "orchard") do
       %{actions: actions} when is_list(actions) -> length(actions)
@@ -246,7 +312,6 @@ defmodule ZcashExplorerWeb.TransactionLive do
   end
 
   defp ironwood_action_count(nil), do: 0
-
   defp ironwood_action_count(tx) do
     case Map.get(tx, :ironwood) || Map.get(tx, "ironwood") do
       %{actions: actions} when is_list(actions) -> length(actions)
@@ -256,7 +321,6 @@ defmodule ZcashExplorerWeb.TransactionLive do
   end
 
   defp tx_fee(nil, _), do: 0.0
-
   defp tx_fee(tx, full_cache) do
     if is_coinbase_tx?(tx) do
       0.0
@@ -266,21 +330,18 @@ defmodule ZcashExplorerWeb.TransactionLive do
       vpub_old = calculate_vpub_old(tx)
       vpub_new = calculate_vpub_new(tx)
       sapling = Map.get(tx, :valueBalanceZat) || Map.get(tx, "valueBalanceZat") || 0
-
       orchard =
         case Map.get(tx, :orchard) || Map.get(tx, "orchard") do
           %{valueBalanceZat: z} when is_number(z) -> z
           %{"valueBalanceZat" => z} when is_number(z) -> z
           _ -> 0
         end
-
       ironwood =
         case Map.get(tx, :ironwood) || Map.get(tx, "ironwood") do
           %{valueBalanceZat: z} when is_number(z) -> z
           %{"valueBalanceZat" => z} when is_number(z) -> z
           _ -> 0
         end
-
       fee_zats = vin_sum - vout_sum - vpub_old + vpub_new + sapling + orchard + ironwood
       fee_zats / 100_000_000.0
     end
@@ -288,7 +349,6 @@ defmodule ZcashExplorerWeb.TransactionLive do
 
   defp is_coinbase_tx?(tx) do
     vin = Map.get(tx, :vin) || Map.get(tx, "vin") || []
-
     match?([%{coinbase: c} | _] when c != nil, vin) or
       match?([%{"coinbase" => c} | _] when c != nil, vin)
   end
@@ -303,25 +363,19 @@ defmodule ZcashExplorerWeb.TransactionLive do
     cond do
       Map.get(vin, :valueZat) != nil ->
         Map.get(vin, :valueZat)
-
       Map.get(vin, :valueSat) != nil ->
         Map.get(vin, :valueSat)
-
       Map.get(vin, :value) != nil ->
         round(Map.get(vin, :value) * 100_000_000)
-
       Map.get(vin, :txid) && Map.get(vin, :vout) != nil ->
         prev_tx = Map.get(full_cache, Map.get(vin, :txid))
-
         if prev_tx && prev_tx.vout && Enum.at(prev_tx.vout, Map.get(vin, :vout)) do
           out = Enum.at(prev_tx.vout, Map.get(vin, :vout))
-
           Map.get(out, :valueZat) || Map.get(out, :valueSat) ||
             round((Map.get(out, :value) || 0) * 100_000_000)
         else
           0
         end
-
       true ->
         0
     end
@@ -361,10 +415,8 @@ defmodule ZcashExplorerWeb.TransactionLive do
     cond do
       Map.get(vin, :address) != nil ->
         Map.get(vin, :address)
-
       Map.get(vin, :txid) && Map.get(vin, :vout) != nil ->
         prev_tx = Map.get(full_cache, Map.get(vin, :txid))
-
         if prev_tx && prev_tx.vout && Enum.at(prev_tx.vout, Map.get(vin, :vout)) do
           out = Enum.at(prev_tx.vout, Map.get(vin, :vout))
           spk = Map.get(out, :scriptPubKey)
@@ -372,7 +424,6 @@ defmodule ZcashExplorerWeb.TransactionLive do
         else
           nil
         end
-
       true ->
         nil
     end
@@ -391,27 +442,23 @@ defmodule ZcashExplorerWeb.TransactionLive do
       {:ok, {:ok, raw}}, acc ->
         prev_tx = Zcashex.Transaction.from_map(raw)
         Map.put(acc, prev_tx.txid, prev_tx)
-
       _, acc ->
         acc
     end)
   end
 
   defp format_zec(nil), do: "0.00000000"
-
   defp format_zec(amount) when is_integer(amount) do
     (amount / 100_000_000)
     |> Decimal.from_float()
     |> Decimal.round(8)
     |> Decimal.to_string(:normal)
   end
-
   defp format_zec(amount) when is_float(amount) or is_number(amount) do
     amount
     |> Decimal.from_float()
     |> Decimal.round(8)
     |> Decimal.to_string(:normal)
   end
-
   defp format_zec(_), do: "0.00000000"
 end
