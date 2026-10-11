@@ -79,22 +79,31 @@ defmodule ZcashExplorerWeb.TransactionLive do
     end
   end
 
-  # Convert a 32-byte finalizer pubkey to a zfinv address if the explorer
-  # has an encoder. Falls back to nil so the template can show hex.
+  # Resolve a 32-byte finalizer pubkey to a zfinv1 address by looking it up
+  # in the Crosslink roster. Falls back to nil (template shows hex) if the
+  # node does not have a signed address for that key.
   defp finalizer_to_zfinv(<<_::binary-size(32)>> = bytes) do
-    # Replace this with the actual call your explorer uses.
-    # Common patterns:
-    #   ZcashExplorer.Finalizer.to_zfinv(bytes)
-    #   Zcashex.FinalizerAddress.encode(bytes)
-    # For now we try a few likely names and fall back.
-    cond do
-      function_exported?(ZcashExplorer.Finalizer, :to_zfinv, 1) ->
-        ZcashExplorer.Finalizer.to_zfinv(bytes)
+    case ZcashExplorer.Crosslink.roster_with_addresses() do
+      {:ok, entries} when is_list(entries) ->
+        Enum.find_value(entries, fn entry ->
+          raw = entry["finalizer_address"] || entry[:finalizer_address]
 
-      function_exported?(Zcashex, :finalizer_to_address, 1) ->
-        Zcashex.finalizer_to_address(bytes)
+          case raw do
+            "zfinv1" <> rest when byte_size(rest) == 128 ->
+              case Base.url_decode64(rest, padding: false) do
+                {:ok, <<pk::binary-size(32), _sig::binary-size(64)>>} when pk == bytes ->
+                  "zfinv1" <> rest
 
-      true ->
+                _ ->
+                  nil
+              end
+
+            _ ->
+              nil
+          end
+        end)
+
+      _ ->
         nil
     end
   rescue
