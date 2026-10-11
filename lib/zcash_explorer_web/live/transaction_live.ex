@@ -66,16 +66,25 @@ defmodule ZcashExplorerWeb.TransactionLive do
 
   defp maybe_decode_staking(_), do: nil
 
-  defp extract_staking_tail(raw) do
-    known_bsig =
-      Base.decode16!(
-        "c515de6f8bb343d872253d63d8a35a47129cf40442fcf72238e904bb9aabe7a99b34a20d0f25884f1a8ed371fc3e8e059f5925a83b0461c4e94fff3fc60cd61f",
-        case: :mixed
-      )
+  # Locate the staking payload by scanning backward for a valid tag byte
+  # (1..5). This works for any VCrosslink transaction, not just one with a
+  # known bindingSig.
+  defp extract_staking_tail(raw) when is_binary(raw) do
+    size = byte_size(raw)
+    min_tail = 1 + 32 + 64
 
-    case :binary.match(raw, known_bsig) do
-      {pos, len} -> binary_part(raw, pos + len, byte_size(raw) - pos - len)
-      :nomatch -> raw
+    if size < min_tail do
+      raw
+    else
+      Enum.find_value((size - min_tail)..0//-1, fn offset ->
+        case binary_part(raw, offset, size - offset) do
+          <<tag, _::binary>> when tag in 1..5 ->
+            binary_part(raw, offset, size - offset)
+
+          _ ->
+            nil
+        end
+      end) || raw
     end
   end
 
