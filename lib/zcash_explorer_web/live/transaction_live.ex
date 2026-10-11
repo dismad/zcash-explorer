@@ -70,23 +70,24 @@ defmodule ZcashExplorerWeb.TransactionLive do
   # (1..5). This works for any VCrosslink transaction, not just one with a
   # known bindingSig.
   defp extract_staking_tail(raw) when is_binary(raw) do
-    size = byte_size(raw)
-    min_tail = 1 + 32 + 64
+  size = byte_size(raw)
+  # Staking payload is at the very end. Only scan the final 300 bytes.
+  window_start = max(0, size - 300)
+  window = binary_part(raw, window_start, size - window_start)
 
-    if size < min_tail do
-      raw
-    else
-      Enum.find_value((size - min_tail)..0//-1, fn offset ->
-        case binary_part(raw, offset, size - offset) do
-          <<tag, _::binary>> when tag in 1..5 ->
-            binary_part(raw, offset, size - offset)
+  # Find the rightmost valid tag that leaves a plausible remaining length
+  Enum.find_value(Enum.reverse(0..(byte_size(window) - 97)), fn rel_offset ->
+    case binary_part(window, rel_offset, byte_size(window) - rel_offset) do
+      <<tag, _::binary>> = candidate when tag in 1..5 ->
+        # Let the decoder accept or reject; we only need a candidate
+        # that starts with a tag and is at least the minimum size.
+        if byte_size(candidate) >= 97, do: candidate, else: nil
 
-          _ ->
-            nil
-        end
-      end) || raw
+      _ ->
+        nil
     end
-  end
+  end) || raw
+end
 
   # Resolve a 32-byte finalizer pubkey to a zfinv1 address by looking it up
   # in the Crosslink roster. Falls back to nil (template shows hex) if the
