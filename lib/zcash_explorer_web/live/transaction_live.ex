@@ -79,6 +79,30 @@ defmodule ZcashExplorerWeb.TransactionLive do
     end
   end
 
+  # Convert a 32-byte finalizer pubkey to a zfinv address if the explorer
+  # has an encoder. Falls back to nil so the template can show hex.
+  defp finalizer_to_zfinv(<<_::binary-size(32)>> = bytes) do
+    # Replace this with the actual call your explorer uses.
+    # Common patterns:
+    #   ZcashExplorer.Finalizer.to_zfinv(bytes)
+    #   Zcashex.FinalizerAddress.encode(bytes)
+    # For now we try a few likely names and fall back.
+    cond do
+      function_exported?(ZcashExplorer.Finalizer, :to_zfinv, 1) ->
+        ZcashExplorer.Finalizer.to_zfinv(bytes)
+
+      function_exported?(Zcashex, :finalizer_to_address, 1) ->
+        Zcashex.finalizer_to_address(bytes)
+
+      true ->
+        nil
+    end
+  rescue
+    _ -> nil
+  end
+
+  defp finalizer_to_zfinv(_), do: nil
+
   @impl true
   def render(assigns) do
     ~H"""
@@ -203,17 +227,25 @@ defmodule ZcashExplorerWeb.TransactionLive do
           </div>
 
           <%= if action = @staking_action do %>
-            <div class="mt-6 bg-white dark:bg-gray-800 shadow rounded-lg p-6">
-              <h2 class="text-lg font-semibold mb-4">Crosslink Staking Action</h2>
+            <div class="mt-6 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800 rounded-lg p-6">
+              <div class="flex items-center justify-between mb-4">
+                <h2 class="text-lg font-semibold text-indigo-900 dark:text-indigo-200">
+                  Crosslink Staking Action
+                </h2>
+                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800 dark:bg-indigo-800 dark:text-indigo-100">
+                  <%= action.kind_name %>
+                </span>
+              </div>
               <dl class="space-y-3">
-                <div class="flex justify-between">
-                  <dt class="text-gray-500">Kind</dt>
-                  <dd class="font-medium"><%= action.kind_name %> (<%= action.kind %>)</dd>
-                </div>
                 <%= if amount = Map.get(action, :amount_zats) do %>
                   <div class="flex justify-between">
                     <dt class="text-gray-500">Amount</dt>
-                    <dd class="font-mono"><%= amount %> zats</dd>
+                    <dd class="font-mono">
+                      <%= amount %> zats
+                      <span class="text-gray-400 text-sm ml-2">
+                        (<%= format_zec(amount / 100_000_000) %> ZEC)
+                      </span>
+                    </dd>
                   </div>
                 <% end %>
                 <%= if key = Map.get(action, :unique_pubkey) do %>
@@ -225,7 +257,21 @@ defmodule ZcashExplorerWeb.TransactionLive do
                 <%= if fin = Map.get(action, :target_finalizer) || Map.get(action, :this_finalizer) do %>
                   <div class="flex flex-col sm:flex-row sm:justify-between gap-1">
                     <dt class="text-gray-500">Finalizer</dt>
-                    <dd class="font-mono text-sm break-all"><%= Base.encode16(fin, case: :lower) %></dd>
+                    <dd>
+                      <%= if zfinv = finalizer_to_zfinv(fin) do %>
+                        <a href={"/finalizer/#{zfinv}"} class="font-mono text-sm text-indigo-600 hover:underline break-all">
+                          <%= zfinv %>
+                        </a>
+                      <% else %>
+                        <span class="font-mono text-sm break-all"><%= Base.encode16(fin, case: :lower) %></span>
+                      <% end %>
+                    </dd>
+                  </div>
+                <% end %>
+                <%= if salt = Map.get(action, :bond_salt) do %>
+                  <div class="flex flex-col sm:flex-row sm:justify-between gap-1">
+                    <dt class="text-gray-500">Bond salt</dt>
+                    <dd class="font-mono text-sm break-all text-gray-500"><%= Base.encode16(salt, case: :lower) %></dd>
                   </div>
                 <% end %>
               </dl>
