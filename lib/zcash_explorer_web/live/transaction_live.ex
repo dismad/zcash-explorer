@@ -47,11 +47,20 @@ defmodule ZcashExplorerWeb.TransactionLive do
     end
   end
 
-  defp maybe_decode_staking(%{"version" => 7, "versiongroupid" => vg, "hex" => hex})
+  # Use the Ironwood bindingSig that the node already parsed.
+  # The staking payload begins immediately after those 64 bytes.
+  defp maybe_decode_staking(%{"version" => 7, "versiongroupid" => vg, "hex" => hex} = tx)
        when is_binary(vg) and is_binary(hex) do
     if String.downcase(vg) == "fffffffe" do
-      with {:ok, raw} <- Base.decode16(hex, case: :mixed),
-           tail when is_binary(tail) <- extract_staking_tail(raw) do
+      bsig_hex =
+        get_in(tx, ["ironwood", "bindingSig"]) ||
+          get_in(tx, [:ironwood, :bindingSig])
+
+      with true <- is_binary(bsig_hex),
+           {:ok, raw} <- Base.decode16(hex, case: :mixed),
+           {:ok, bsig} <- Base.decode16(bsig_hex, case: :mixed),
+           {pos, len} <- :binary.match(raw, bsig),
+           tail <- binary_part(raw, pos + len, byte_size(raw) - pos - len) do
         case Zcashex.Crosslink.StakingAction.decode(tail) do
           {:ok, action} when is_map(action) -> action
           _ -> nil
@@ -65,29 +74,6 @@ defmodule ZcashExplorerWeb.TransactionLive do
   end
 
   defp maybe_decode_staking(_), do: nil
-
-  # Locate the staking payload by scanning backward for a valid tag byte
-  # (1..5). This works for any VCrosslink transaction, not just one with a
-  # known bindingSig.
-  defp extract_staking_tail(raw) when is_binary(raw) do
-  size = byte_size(raw)
-  # Staking payload is at the very end. Only scan the final 300 bytes.
-  window_start = max(0, size - 300)
-  window = binary_part(raw, window_start, size - window_start)
-
-  # Find the rightmost valid tag that leaves a plausible remaining length
-  Enum.find_value(Enum.reverse(0..(byte_size(window) - 97)), fn rel_offset ->
-    case binary_part(window, rel_offset, byte_size(window) - rel_offset) do
-      <<tag, _::binary>> = candidate when tag in 1..5 ->
-        # Let the decoder accept or reject; we only need a candidate
-        # that starts with a tag and is at least the minimum size.
-        if byte_size(candidate) >= 97, do: candidate, else: nil
-
-      _ ->
-        nil
-    end
-  end) || raw
-end
 
   # Resolve a 32-byte finalizer pubkey to a zfinv1 address by looking it up
   # in the Crosslink roster. Falls back to nil (template shows hex) if the
