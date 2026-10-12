@@ -6,13 +6,9 @@ defmodule ZcashExplorerWeb.RecentBlocksLive do
     network = Application.get_env(:zcash_explorer, Zcashex, [])[:zcash_network] || "mainnet"
     standalone = Map.get(session, "standalone", true)
 
-    if connected?(socket), do: Process.send_after(self(), :update, 1000)
+    if connected?(socket), do: Process.send_after(self(), :update, 5_000)
 
-    info =
-      case Cachex.get(:app_cache, "block_cache") do
-        {:ok, data} when is_list(data) -> data
-        _ -> []
-      end
+    info = load_blocks()
 
     chain =
       case Cachex.get(:app_cache, "metrics") do
@@ -34,13 +30,9 @@ defmodule ZcashExplorerWeb.RecentBlocksLive do
 
   @impl true
   def handle_info(:update, socket) do
-    Process.send_after(self(), :update, 1000)
+    Process.send_after(self(), :update, 5_000)
 
-    info =
-      case Cachex.get(:app_cache, "block_cache") do
-        {:ok, data} when is_list(data) -> data
-        _ -> []
-      end
+    info = load_blocks(socket.assigns.block_cache)
 
     blocks_to_show =
       if socket.assigns.standalone, do: info, else: Enum.take(info, 12)
@@ -50,6 +42,13 @@ defmodule ZcashExplorerWeb.RecentBlocksLive do
        block_cache: info,
        blocks_to_show: blocks_to_show
      )}
+  end
+
+  defp load_blocks(fallback \\ []) do
+    case ZcashExplorer.Blocks.Recent.list() do
+      {:ok, blocks} when blocks != [] -> blocks
+      _ -> fallback
+    end
   end
 
   @impl true
