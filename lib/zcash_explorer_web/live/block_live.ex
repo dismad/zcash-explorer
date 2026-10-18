@@ -7,7 +7,77 @@ defmodule ZcashExplorerWeb.BlockLive do
     network = Application.get_env(:zcash_explorer, Zcashex, [])[:zcash_network] || "mainnet"
     standalone = Map.get(session, "standalone", true)
 
-    case Zcashex.getblock(hash, 2) do
+    case fetch_block(hash) do
+      {:ok, block_map, full_cache} ->
+        block = Zcashex.Block.from_map(block_map)
+
+        {:ok,
+         assign(socket,
+           block: block,
+           hash: hash,
+           zcash_network: network,
+           standalone: standalone,
+           full_cache: full_cache
+         )}
+
+      _ ->
+        {:ok,
+         assign(socket,
+           block: nil,
+           hash: hash,
+           zcash_network: network,
+           standalone: standalone,
+           full_cache: %{}
+         )}
+    end
+  end
+
+  # Prefer Zebrad 7 getblock verbosity 3 (prevout + fee in one call).
+  # Fall back to verbosity 2 + follow-up getrawtransaction when the node
+  # does not support it (zsa / crosslink).
+  defp fetch_block(hash) do
+    case Zcashex.getblock(hash, 3) do
+      {:ok, block_map} when is_map(block_map) ->
+        if has_v3_fields?(block_map) do
+          txs = block_map["tx"] || []
+          full_cache =
+            txs
+            |> Enum.reduce(%{}, fn tx, acc ->
+              case tx do
+                %{"txid" => txid} = full when is_binary(txid) -> Map.put(acc, txid, full)
+                _ -> acc
+              end
+            end)
+
+          {:ok, block_map, full_cache}
+        else
+          fetch_block_legacy(hash, block_map)
+        end
+
+      _ ->
+        fetch_block_legacy(hash, nil)
+    end
+  end
+
+  defp has_v3_fields?(%{"tx" => txs}) when is_list(txs) do
+    Enum.any?(txs, fn tx ->
+      is_map(tx) and
+        (Map.has_key?(tx, "fee") or
+           Enum.any?(tx["vin"] || [], &Map.has_key?(&1, "prevout")))
+    end)
+  end
+
+  defp has_v3_fields?(_), do: false
+
+  defp fetch_block_legacy(hash, maybe_map) do
+    result =
+      if is_map(maybe_map) do
+        {:ok, maybe_map}
+      else
+        Zcashex.getblock(hash, 2)
+      end
+
+    case result do
       {:ok, block_map} ->
         block = Zcashex.Block.from_map(block_map)
 
@@ -35,26 +105,10 @@ defmodule ZcashExplorerWeb.BlockLive do
             end
           end)
 
-        full_cache = Map.merge(block_txs, prev_txs)
+        {:ok, block_map, Map.merge(block_txs, prev_txs)}
 
-        {:ok,
-         assign(socket,
-           block: block,
-           hash: hash,
-           zcash_network: network,
-           standalone: standalone,
-           full_cache: full_cache
-         )}
-
-      _ ->
-        {:ok,
-         assign(socket,
-           block: nil,
-           hash: hash,
-           zcash_network: network,
-           standalone: standalone,
-           full_cache: %{}
-         )}
+      other ->
+        other
     end
   end
 
@@ -451,28 +505,43 @@ defmodule ZcashExplorerWeb.BlockLive do
     if is_nil(full) || is_coinbase?(full) do
       0.0
     else
-      vin_sum = calculate_vin_sum(full, full_cache)
-      vout_sum = calculate_vout_sum(full)
-      vpub_old = calculate_vpub_old(full)
-      vpub_new = calculate_vpub_new(full)
-      sapling = full["valueBalanceZat"] || 0
-      orchard = get_in(full, ["orchard", "valueBalanceZat"]) || 0
-      ironwood = get_in(full, ["ironwood", "valueBalanceZat"]) || 0
-      fee_zats = vin_sum - vout_sum - vpub_old + vpub_new + sapling + orchard + ironwood
-      fee_zats / 100_000_000.0
+      case full["fee"] do
+        fee when is_number(fee) ->
+          fee * 1.0
+
+        _ ->
+          vin_sum = calculate_vin_sum(full, full_cache)
+          vout_sum = calculate_vout_sum(full)
+          vpub_old = calculate_vpub_old(full)
+          vpub_new = calculate_vpub_new(full)
+          sapling = full["valueBalanceZat"] || 0
+          orchard = get_in(full, ["orchard", "valueBalanceZat"]) || 0
+          ironwood = get_in(full, ["ironwood", "valueBalanceZat"]) || 0
+          fee_zats = vin_sum - vout_sum - vpub_old + vpub_new + sapling + orchard + ironwood
+          fee_zats / 100_000_000.0
+      end
     end
   end
 
   defp calculate_vin_sum(full_tx, full_cache) do
     Enum.reduce(full_tx["vin"] || [], 0, fn vin, acc ->
-      case {vin["txid"], vin["vout"]} do
-        {ptxid, idx} when is_binary(ptxid) and is_integer(idx) ->
-          prev_tx = Map.get(full_cache, ptxid) || %{}
-          vout = Enum.at(prev_tx["vout"] || [], idx)
-          acc + safe_zats(vout)
+      case vin["prevout"] do
+        %{"valueSat" => zats} when is_integer(zats) ->
+          acc + zats
+
+        %{"value" => value} when is_number(value) ->
+          acc + round(value * 100_000_000)
 
         _ ->
-          acc
+          case {vin["txid"], vin["vout"]} do
+            {ptxid, idx} when is_binary(ptxid) and is_integer(idx) ->
+              prev_tx = Map.get(full_cache, ptxid) || %{}
+              vout = Enum.at(prev_tx["vout"] || [], idx)
+              acc + safe_zats(vout)
+
+            _ ->
+              acc
+          end
       end
     end)
   end
