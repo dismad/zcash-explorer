@@ -11,7 +11,6 @@ defmodule ZcashExplorer.Transactions.TransactionWarmer do
 
   def execute(_state) do
     Logger.info("TransactionWarmer: cycle started")
-
     ensure_agent()
 
     case safe_call(fn -> Zcashex.getblockcount() end) do
@@ -36,7 +35,6 @@ defmodule ZcashExplorer.Transactions.TransactionWarmer do
         Agent.update(@agent_name, fn _ -> %{last_height: tip, txs: updated} end)
 
         Logger.info("TransactionWarmer: writing #{length(updated)} txs (tip #{tip})")
-
         {:ok, [{@cache_key, updated}]}
 
       {:error, reason} ->
@@ -52,7 +50,8 @@ defmodule ZcashExplorer.Transactions.TransactionWarmer do
   defp ensure_agent do
     case Process.whereis(@agent_name) do
       nil ->
-        Agent.start_link(fn -> %{last_height: -1, txs: []} end, name: @agent_name)
+        {:ok, _} = Agent.start_link(fn -> %{last_height: -1, txs: []} end, name: @agent_name)
+        :ok
 
       _pid ->
         :ok
@@ -74,11 +73,8 @@ defmodule ZcashExplorer.Transactions.TransactionWarmer do
                 txid = raw["txid"] || raw[:txid]
 
                 case safe_call(fn -> Zcashex.getrawtransaction(txid, 1) end) do
-                  {:ok, full} when is_map(full) ->
-                    build_tx(full, height)
-
-                  _ ->
-                    nil
+                  {:ok, full} when is_map(full) -> build_tx(full, height)
+                  _ -> nil
                 end
               end)
               |> Enum.reject(&is_nil/1)

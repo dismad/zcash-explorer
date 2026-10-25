@@ -10,7 +10,6 @@ defmodule ZcashExplorer.Blocks.BlockWarmer do
 
   def execute(_state) do
     Logger.info("BlockWarmer: cycle started")
-
     ensure_agent()
 
     case Zcashex.getblockcount() do
@@ -20,7 +19,6 @@ defmodule ZcashExplorer.Blocks.BlockWarmer do
         new_blocks =
           cond do
             last_height < 0 ->
-              # Smaller initial window so the first cycle finishes quickly
               start_height = max(0, tip - 50)
               Logger.info("BlockWarmer: first run, fetching #{start_height}..#{tip}")
               fetch_range(start_height, tip)
@@ -44,7 +42,6 @@ defmodule ZcashExplorer.Blocks.BlockWarmer do
         Agent.update(@agent_name, fn _ -> %{last_height: tip, blocks: updated} end)
 
         Logger.info("BlockWarmer: writing #{length(updated)} blocks (tip #{tip})")
-
         {:ok, [{@cache_key, updated}]}
 
       {:error, reason} ->

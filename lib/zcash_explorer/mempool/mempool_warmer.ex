@@ -12,7 +12,6 @@ defmodule ZcashExplorer.Mempool.MempoolWarmer do
 
   def execute(_state) do
     Logger.info("MempoolWarmer: cycle started")
-
     ensure_agent()
 
     case Zcashex.getrawmempool(true) do
@@ -36,12 +35,10 @@ defmodule ZcashExplorer.Mempool.MempoolWarmer do
           |> Map.take(current_txids)
 
         enriched_map = Map.merge(kept, newly_enriched)
-
         Agent.update(@agent_name, fn _ -> enriched_map end)
 
         list = Map.values(enriched_map)
         Logger.info("MempoolWarmer: writing #{length(list)} txs to cache")
-
         {:ok, [{"raw_mempool", list}]}
 
       {:error, reason} ->
@@ -57,7 +54,8 @@ defmodule ZcashExplorer.Mempool.MempoolWarmer do
   defp ensure_agent do
     case Process.whereis(@agent_name) do
       nil ->
-        Agent.start_link(fn -> %{} end, name: @agent_name)
+        {:ok, _} = Agent.start_link(fn -> %{} end, name: @agent_name)
+        :ok
 
       _pid ->
         :ok
@@ -86,9 +84,7 @@ defmodule ZcashExplorer.Mempool.MempoolWarmer do
       on_timeout: :kill_task
     )
     |> Enum.reduce(%{}, fn
-      {:ok, {txid, enriched}}, acc ->
-        Map.put(acc, txid, enriched)
-
+      {:ok, {txid, enriched}}, acc -> Map.put(acc, txid, enriched)
       {:exit, reason}, acc ->
         Logger.warning("MempoolWarmer: task exit: #{inspect(reason)}")
         acc
