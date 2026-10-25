@@ -2,17 +2,18 @@ defmodule ZcashExplorer.MixProject do
   use Mix.Project
 
   def project do
-    [
-      app: :zcash_explorer,
-      version: "0.1.0",
-      elixir: "~> 1.18",
-      elixirc_paths: elixirc_paths(Mix.env()),
-      compilers: Mix.compilers(),
-      start_permanent: Mix.env() == :prod,
-      aliases: aliases(),
-      deps: deps()
-    ]
-  end
+  [
+    app: :zcash_explorer,
+    version: "0.1.0",
+    elixir: "~> 1.18",
+    elixirc_paths: elixirc_paths(Mix.env()),
+    compilers: Mix.compilers(),
+    start_permanent: Mix.env() == :prod,
+    aliases: aliases(),
+    deps: deps(),
+    listeners: [Phoenix.CodeReloader]
+  ]
+end
 
   def application do
     [
