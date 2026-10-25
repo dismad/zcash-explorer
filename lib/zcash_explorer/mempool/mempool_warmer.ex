@@ -4,16 +4,19 @@ defmodule ZcashExplorer.Mempool.MempoolWarmer do
 
   import ZcashExplorerWeb.TransactionHelper
 
-  @concurrency 6
-  @timeout 5_000
+  @concurrency 4
+  @timeout 8_000
   @enriched_key "raw_mempool_enriched"
 
   def interval, do: :timer.seconds(5)
 
   def execute(_state) do
+    Logger.info("MempoolWarmer: cycle started")
+
     case Zcashex.getrawmempool(true) do
       {:ok, raw_mempool} when is_map(raw_mempool) ->
         current_txids = Map.keys(raw_mempool)
+        Logger.info("MempoolWarmer: node reports #{length(current_txids)} txs")
 
         previous =
           case Cachex.get(:app_cache, @enriched_key) do
@@ -22,37 +25,42 @@ defmodule ZcashExplorer.Mempool.MempoolWarmer do
           end
 
         previous_txids = Map.keys(previous)
-
         added = current_txids -- previous_txids
         removed = previous_txids -- current_txids
 
+        Logger.info("MempoolWarmer: #{length(added)} new, #{length(removed)} removed")
+
         newly_enriched =
-          added
-          |> Task.async_stream(
-            fn txid ->
-              info = Map.get(raw_mempool, txid)
+          if added == [] do
+            %{}
+          else
+            added
+            |> Task.async_stream(
+              fn txid ->
+                info = Map.get(raw_mempool, txid, %{})
 
-              case Zcashex.getrawtransaction(txid, 1) do
-                {:ok, full_tx} ->
-                  {txid, enrich(txid, info, full_tx)}
+                case Zcashex.getrawtransaction(txid, 1) do
+                  {:ok, full_tx} ->
+                    {txid, enrich(txid, info, full_tx)}
 
-                {:error, reason} ->
-                  Logger.warning("MempoolWarmer: failed to fetch #{txid}: #{inspect(reason)}")
-                  {txid, fallback(txid, info)}
-              end
-            end,
-            max_concurrency: @concurrency,
-            timeout: @timeout,
-            on_timeout: :kill_task
-          )
-          |> Enum.reduce(%{}, fn
-            {:ok, {txid, enriched}}, acc ->
-              Map.put(acc, txid, enriched)
+                  {:error, reason} ->
+                    Logger.warning("MempoolWarmer: getrawtransaction failed for #{txid}: #{inspect(reason)}")
+                    {txid, fallback(txid, info)}
+                end
+              end,
+              max_concurrency: @concurrency,
+              timeout: @timeout,
+              on_timeout: :kill_task
+            )
+            |> Enum.reduce(%{}, fn
+              {:ok, {txid, enriched}}, acc ->
+                Map.put(acc, txid, enriched)
 
-            {:exit, reason}, acc ->
-              Logger.warning("MempoolWarmer: task exit: #{inspect(reason)}")
-              acc
-          end)
+              {:exit, reason}, acc ->
+                Logger.warning("MempoolWarmer: task failed: #{inspect(reason)}")
+                acc
+            end)
+          end
 
         kept =
           previous
@@ -61,20 +69,17 @@ defmodule ZcashExplorer.Mempool.MempoolWarmer do
 
         enriched_map = Map.merge(kept, newly_enriched)
 
-        # Persist for next cycle
+        # Persist enriched map for next cycle
         Cachex.put(:app_cache, @enriched_key, enriched_map)
 
-        # List the LiveView already expects
         list = Map.values(enriched_map)
 
-        Logger.info(
-          "MempoolWarmer: #{length(list)} txs (#{length(added)} new, #{length(removed)} removed)"
-        )
+        Logger.info("MempoolWarmer: writing #{length(list)} enriched txs to cache")
 
         {:ok, [{"raw_mempool", list}]}
 
       {:error, reason} ->
-        Logger.error("MempoolWarmer failed: #{inspect(reason)}")
+        Logger.error("MempoolWarmer: getrawmempool failed: #{inspect(reason)}")
         :ignore
 
       other ->
