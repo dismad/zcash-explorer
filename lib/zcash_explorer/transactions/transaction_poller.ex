@@ -1,29 +1,38 @@
-defmodule ZcashExplorer.Transactions.TransactionWarmer do
-  use Cachex.Warmer
+defmodule ZcashExplorer.Transactions.TransactionPoller do
+  use GenServer
   require Logger
 
-  @rpc_timeout 15_000
+  @interval 10_000
   @max_txs 20
-  @cache_key "transaction_cache"
-  @agent_name __MODULE__.State
+  @rpc_timeout 15_000
 
-  def interval, do: :timer.seconds(10)
+  def start_link(_opts) do
+    GenServer.start_link(__MODULE__, %{last_height: -1, txs: []}, name: __MODULE__)
+  end
 
-  def execute(_state) do
-    Logger.info("TransactionWarmer: cycle started")
-    ensure_agent()
+  def init(state) do
+    send(self(), :poll)
+    {:ok, state}
+  end
+
+  def handle_info(:poll, state) do
+    new_state = poll(state)
+    Process.send_after(self(), :poll, @interval)
+    {:noreply, new_state}
+  end
+
+  defp poll(%{last_height: last_height, txs: existing} = state) do
+    Logger.info("TransactionPoller: cycle started")
 
     case safe_call(fn -> Zcashex.getblockcount() end) do
       {:ok, tip} when is_integer(tip) ->
-        %{last_height: last_height, txs: existing} = Agent.get(@agent_name, & &1)
-
         new_txs =
           if last_height < tip do
             from = max(0, tip - 30)
-            Logger.info("TransactionWarmer: fetching recent txs from #{from}..#{tip}")
+            Logger.info("TransactionPoller: fetching recent txs from #{from}..#{tip}")
             fetch_recent_txs(from, tip)
           else
-            Logger.info("TransactionWarmer: tip unchanged (#{tip})")
+            Logger.info("TransactionPoller: tip unchanged (#{tip})")
             []
           end
 
@@ -32,29 +41,17 @@ defmodule ZcashExplorer.Transactions.TransactionWarmer do
           |> Enum.uniq_by(& &1["txid"])
           |> Enum.take(@max_txs)
 
-        Agent.update(@agent_name, fn _ -> %{last_height: tip, txs: updated} end)
-
-        Logger.info("TransactionWarmer: writing #{length(updated)} txs (tip #{tip})")
-        {:ok, [{@cache_key, updated}]}
+        Cachex.put(:app_cache, "transaction_cache", updated)
+        Logger.info("TransactionPoller: wrote #{length(updated)} txs (tip #{tip})")
+        %{last_height: tip, txs: updated}
 
       {:error, reason} ->
-        Logger.warning("TransactionWarmer: getblockcount failed: #{inspect(reason)}")
-        :ignore
+        Logger.warning("TransactionPoller: getblockcount failed: #{inspect(reason)}")
+        state
 
       other ->
-        Logger.warning("TransactionWarmer: unexpected result: #{inspect(other)}")
-        :ignore
-    end
-  end
-
-  defp ensure_agent do
-    case Process.whereis(@agent_name) do
-      nil ->
-        {:ok, _} = Agent.start_link(fn -> %{last_height: -1, txs: []} end, name: @agent_name)
-        :ok
-
-      _pid ->
-        :ok
+        Logger.warning("TransactionPoller: unexpected result: #{inspect(other)}")
+        state
     end
   end
 

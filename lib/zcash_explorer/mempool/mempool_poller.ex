@@ -1,64 +1,62 @@
-defmodule ZcashExplorer.Mempool.MempoolWarmer do
-  use Cachex.Warmer
+defmodule ZcashExplorer.Mempool.MempoolPoller do
+  use GenServer
   require Logger
 
   import ZcashExplorerWeb.TransactionHelper
 
+  @interval 5_000
   @concurrency 4
   @timeout 10_000
-  @agent_name __MODULE__.State
 
-  def interval, do: :timer.seconds(5)
+  def start_link(_opts) do
+    GenServer.start_link(__MODULE__, %{}, name: __MODULE__)
+  end
 
-  def execute(_state) do
-    Logger.info("MempoolWarmer: cycle started")
-    ensure_agent()
+  def init(state) do
+    send(self(), :poll)
+    {:ok, state}
+  end
+
+  def handle_info(:poll, previous) do
+    new_state = poll(previous)
+    Process.send_after(self(), :poll, @interval)
+    {:noreply, new_state}
+  end
+
+  defp poll(previous) when is_map(previous) do
+    Logger.info("MempoolPoller: cycle started")
 
     case Zcashex.getrawmempool(true) do
       {:ok, raw_mempool} when is_map(raw_mempool) ->
         current_txids = Map.keys(raw_mempool)
-        Logger.info("MempoolWarmer: node reports #{length(current_txids)} txs")
+        Logger.info("MempoolPoller: node reports #{length(current_txids)} txs")
 
-        previous = Agent.get(@agent_name, & &1)
         previous_txids = Map.keys(previous)
-
         added = current_txids -- previous_txids
         removed = previous_txids -- current_txids
 
-        Logger.info("MempoolWarmer: #{length(added)} new, #{length(removed)} removed")
+        Logger.info("MempoolPoller: #{length(added)} new, #{length(removed)} removed")
 
         newly_enriched = fetch_and_enrich(added, raw_mempool)
 
-        kept =
+        enriched_map =
           previous
           |> Map.drop(removed)
           |> Map.take(current_txids)
-
-        enriched_map = Map.merge(kept, newly_enriched)
-        Agent.update(@agent_name, fn _ -> enriched_map end)
+          |> Map.merge(newly_enriched)
 
         list = Map.values(enriched_map)
-        Logger.info("MempoolWarmer: writing #{length(list)} txs to cache")
-        {:ok, [{"raw_mempool", list}]}
+        Cachex.put(:app_cache, "raw_mempool", list)
+        Logger.info("MempoolPoller: wrote #{length(list)} txs to cache")
+        enriched_map
 
       {:error, reason} ->
-        Logger.error("MempoolWarmer: getrawmempool failed: #{inspect(reason)}")
-        :ignore
+        Logger.error("MempoolPoller: getrawmempool failed: #{inspect(reason)}")
+        previous
 
       other ->
-        Logger.warning("MempoolWarmer: unexpected getrawmempool: #{inspect(other)}")
-        :ignore
-    end
-  end
-
-  defp ensure_agent do
-    case Process.whereis(@agent_name) do
-      nil ->
-        {:ok, _} = Agent.start_link(fn -> %{} end, name: @agent_name)
-        :ok
-
-      _pid ->
-        :ok
+        Logger.warning("MempoolPoller: unexpected getrawmempool: #{inspect(other)}")
+        previous
     end
   end
 
@@ -75,7 +73,7 @@ defmodule ZcashExplorer.Mempool.MempoolWarmer do
             {txid, enrich(txid, info, full_tx)}
 
           {:error, reason} ->
-            Logger.warning("MempoolWarmer: getrawtransaction #{txid} failed: #{inspect(reason)}")
+            Logger.warning("MempoolPoller: getrawtransaction #{txid} failed: #{inspect(reason)}")
             {txid, fallback(txid, info)}
         end
       end,
@@ -86,7 +84,7 @@ defmodule ZcashExplorer.Mempool.MempoolWarmer do
     |> Enum.reduce(%{}, fn
       {:ok, {txid, enriched}}, acc -> Map.put(acc, txid, enriched)
       {:exit, reason}, acc ->
-        Logger.warning("MempoolWarmer: task exit: #{inspect(reason)}")
+        Logger.warning("MempoolPoller: task exit: #{inspect(reason)}")
         acc
     end)
   end

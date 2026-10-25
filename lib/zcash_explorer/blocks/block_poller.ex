@@ -1,35 +1,44 @@
-defmodule ZcashExplorer.Blocks.BlockWarmer do
-  use Cachex.Warmer
+defmodule ZcashExplorer.Blocks.BlockPoller do
+  use GenServer
   require Logger
 
   @max_blocks 200
-  @cache_key "block_cache"
-  @agent_name __MODULE__.State
+  @interval 2_000
 
-  def interval, do: :timer.seconds(2)
+  def start_link(_opts) do
+    GenServer.start_link(__MODULE__, %{last_height: -1, blocks: []}, name: __MODULE__)
+  end
 
-  def execute(_state) do
-    Logger.info("BlockWarmer: cycle started")
-    ensure_agent()
+  def init(state) do
+    send(self(), :poll)
+    {:ok, state}
+  end
+
+  def handle_info(:poll, state) do
+    new_state = poll(state)
+    Process.send_after(self(), :poll, @interval)
+    {:noreply, new_state}
+  end
+
+  defp poll(%{last_height: last_height, blocks: existing} = state) do
+    Logger.info("BlockPoller: cycle started")
 
     case Zcashex.getblockcount() do
       {:ok, tip} when is_integer(tip) ->
-        %{last_height: last_height, blocks: existing} = Agent.get(@agent_name, & &1)
-
         new_blocks =
           cond do
             last_height < 0 ->
               start_height = max(0, tip - 50)
-              Logger.info("BlockWarmer: first run, fetching #{start_height}..#{tip}")
+              Logger.info("BlockPoller: first run, fetching #{start_height}..#{tip}")
               fetch_range(start_height, tip)
 
             last_height < tip ->
               from = last_height + 1
-              Logger.info("BlockWarmer: fetching new blocks #{from}..#{tip}")
+              Logger.info("BlockPoller: fetching new blocks #{from}..#{tip}")
               fetch_range(from, tip)
 
             true ->
-              Logger.info("BlockWarmer: tip unchanged (#{tip})")
+              Logger.info("BlockPoller: tip unchanged (#{tip})")
               []
           end
 
@@ -39,29 +48,17 @@ defmodule ZcashExplorer.Blocks.BlockWarmer do
           |> Enum.sort_by(& &1["height"], :desc)
           |> Enum.take(@max_blocks)
 
-        Agent.update(@agent_name, fn _ -> %{last_height: tip, blocks: updated} end)
-
-        Logger.info("BlockWarmer: writing #{length(updated)} blocks (tip #{tip})")
-        {:ok, [{@cache_key, updated}]}
+        Cachex.put(:app_cache, "block_cache", updated)
+        Logger.info("BlockPoller: wrote #{length(updated)} blocks (tip #{tip})")
+        %{last_height: tip, blocks: updated}
 
       {:error, reason} ->
-        Logger.error("BlockWarmer: getblockcount failed: #{inspect(reason)}")
-        :ignore
+        Logger.error("BlockPoller: getblockcount failed: #{inspect(reason)}")
+        state
 
       other ->
-        Logger.warning("BlockWarmer: unexpected getblockcount: #{inspect(other)}")
-        :ignore
-    end
-  end
-
-  defp ensure_agent do
-    case Process.whereis(@agent_name) do
-      nil ->
-        {:ok, _} = Agent.start_link(fn -> %{last_height: -1, blocks: []} end, name: @agent_name)
-        :ok
-
-      _pid ->
-        :ok
+        Logger.warning("BlockPoller: unexpected getblockcount: #{inspect(other)}")
+        state
     end
   end
 
@@ -83,7 +80,7 @@ defmodule ZcashExplorer.Blocks.BlockWarmer do
             }
 
           other ->
-            Logger.warning("BlockWarmer: getblock #{height} failed: #{inspect(other)}")
+            Logger.warning("BlockPoller: getblock #{height} failed: #{inspect(other)}")
             nil
         end
       end,
@@ -95,7 +92,7 @@ defmodule ZcashExplorer.Blocks.BlockWarmer do
       {:ok, nil}, acc -> acc
       {:ok, block}, acc -> [block | acc]
       {:exit, reason}, acc ->
-        Logger.warning("BlockWarmer: fetch task exit: #{inspect(reason)}")
+        Logger.warning("BlockPoller: fetch task exit: #{inspect(reason)}")
         acc
     end)
     |> Enum.reverse()
