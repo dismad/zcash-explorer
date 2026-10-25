@@ -2,7 +2,7 @@ defmodule ZcashExplorer.Blocks.BlockWarmer do
   use Cachex.Warmer
   require Logger
 
-  @max_blocks 400
+  @max_blocks 200
   @cache_key "block_cache"
   @agent_name __MODULE__.State
 
@@ -20,7 +20,8 @@ defmodule ZcashExplorer.Blocks.BlockWarmer do
         new_blocks =
           cond do
             last_height < 0 ->
-              start_height = max(0, tip - @max_blocks + 1)
+              # Smaller initial window so the first cycle finishes quickly
+              start_height = max(0, tip - 50)
               Logger.info("BlockWarmer: first run, fetching #{start_height}..#{tip}")
               fetch_range(start_height, tip)
 
@@ -59,7 +60,8 @@ defmodule ZcashExplorer.Blocks.BlockWarmer do
   defp ensure_agent do
     case Process.whereis(@agent_name) do
       nil ->
-        Agent.start_link(fn -> %{last_height: -1, blocks: []} end, name: @agent_name)
+        {:ok, _} = Agent.start_link(fn -> %{last_height: -1, blocks: []} end, name: @agent_name)
+        :ok
 
       _pid ->
         :ok
@@ -88,14 +90,16 @@ defmodule ZcashExplorer.Blocks.BlockWarmer do
             nil
         end
       end,
-      max_concurrency: 8,
-      timeout: 15_000,
+      max_concurrency: 6,
+      timeout: 10_000,
       on_timeout: :kill_task
     )
     |> Enum.reduce([], fn
       {:ok, nil}, acc -> acc
       {:ok, block}, acc -> [block | acc]
-      {:exit, _}, acc -> acc
+      {:exit, reason}, acc ->
+        Logger.warning("BlockWarmer: fetch task exit: #{inspect(reason)}")
+        acc
     end)
     |> Enum.reverse()
   end

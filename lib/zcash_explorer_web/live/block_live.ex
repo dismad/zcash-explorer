@@ -35,11 +35,15 @@ defmodule ZcashExplorerWeb.BlockLive do
   # Prefer Zebrad 7 getblock verbosity 3 (prevout + fee in one call).
   # Fall back to verbosity 2 + follow-up getrawtransaction when the node
   # does not support it (zsa / crosslink).
-  defp fetch_block(hash) do
-    case Zcashex.getblock(hash, 3) do
+  # Accepts a block hash or a height string (e.g. "4538757").
+  defp fetch_block(hash_or_height) do
+    arg = normalize_block_arg(hash_or_height)
+
+    case Zcashex.getblock(arg, 3) do
       {:ok, block_map} when is_map(block_map) ->
         if has_v3_fields?(block_map) do
           txs = block_map["tx"] || []
+
           full_cache =
             txs
             |> Enum.reduce(%{}, fn tx, acc ->
@@ -51,13 +55,24 @@ defmodule ZcashExplorerWeb.BlockLive do
 
           {:ok, block_map, full_cache}
         else
-          fetch_block_legacy(hash, block_map)
+          fetch_block_legacy(arg, block_map)
         end
 
       _ ->
-        fetch_block_legacy(hash, nil)
+        fetch_block_legacy(arg, nil)
     end
   end
+
+  # Height strings become integers so they hit the integer clause in Zcashex.
+  # Real hashes stay as binaries.
+  defp normalize_block_arg(value) when is_binary(value) do
+    case Integer.parse(value) do
+      {height, ""} -> height
+      _ -> value
+    end
+  end
+
+  defp normalize_block_arg(value), do: value
 
   defp has_v3_fields?(%{"tx" => txs}) when is_list(txs) do
     Enum.any?(txs, fn tx ->
@@ -69,12 +84,12 @@ defmodule ZcashExplorerWeb.BlockLive do
 
   defp has_v3_fields?(_), do: false
 
-  defp fetch_block_legacy(hash, maybe_map) do
+  defp fetch_block_legacy(arg, maybe_map) do
     result =
       if is_map(maybe_map) do
         {:ok, maybe_map}
       else
-        Zcashex.getblock(hash, 2)
+        Zcashex.getblock(arg, 2)
       end
 
     case result do
@@ -480,7 +495,6 @@ defmodule ZcashExplorerWeb.BlockLive do
   defp format_delta(_, _), do: "0.00000000"
 
   defp delta_class(_, "fee"), do: "text-gray-500"
-
   defp delta_class(n, _) when is_number(n) and n > 0.00000001,
     do: "text-emerald-600 dark:text-emerald-400"
 
