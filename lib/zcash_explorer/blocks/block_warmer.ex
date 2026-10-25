@@ -4,42 +4,34 @@ defmodule ZcashExplorer.Blocks.BlockWarmer do
 
   @max_blocks 400
   @cache_key "block_cache"
-  @state_key "block_warmer_state"
+  @agent_name __MODULE__.State
 
-  def interval, do: :timer.seconds(5)
+  def interval, do: :timer.seconds(2)
 
   def execute(_state) do
     Logger.info("BlockWarmer: cycle started")
 
+    ensure_agent()
+
     case Zcashex.getblockcount() do
       {:ok, tip} when is_integer(tip) ->
-        previous_state =
-          case Cachex.get(:app_cache, @state_key) do
-            {:ok, %{last_height: h, blocks: blocks}} when is_integer(h) and is_list(blocks) ->
-              %{last_height: h, blocks: blocks}
-
-            _ ->
-              %{last_height: -1, blocks: []}
-          end
-
-        last_height = previous_state.last_height
-        existing = previous_state.blocks
+        %{last_height: last_height, blocks: existing} = Agent.get(@agent_name, & &1)
 
         new_blocks =
-          if last_height < 0 do
-            # First run: fetch the window once
-            start_height = max(0, tip - @max_blocks + 1)
-            Logger.info("BlockWarmer: first run, fetching #{start_height}..#{tip}")
-            fetch_range(start_height, tip)
-          else
-            # Incremental: only new blocks
-            from = last_height + 1
-            if from <= tip do
+          cond do
+            last_height < 0 ->
+              start_height = max(0, tip - @max_blocks + 1)
+              Logger.info("BlockWarmer: first run, fetching #{start_height}..#{tip}")
+              fetch_range(start_height, tip)
+
+            last_height < tip ->
+              from = last_height + 1
               Logger.info("BlockWarmer: fetching new blocks #{from}..#{tip}")
               fetch_range(from, tip)
-            else
+
+            true ->
+              Logger.info("BlockWarmer: tip unchanged (#{tip})")
               []
-            end
           end
 
         updated =
@@ -48,7 +40,7 @@ defmodule ZcashExplorer.Blocks.BlockWarmer do
           |> Enum.sort_by(& &1["height"], :desc)
           |> Enum.take(@max_blocks)
 
-        Cachex.put(:app_cache, @state_key, %{last_height: tip, blocks: updated})
+        Agent.update(@agent_name, fn _ -> %{last_height: tip, blocks: updated} end)
 
         Logger.info("BlockWarmer: writing #{length(updated)} blocks (tip #{tip})")
 
@@ -64,27 +56,47 @@ defmodule ZcashExplorer.Blocks.BlockWarmer do
     end
   end
 
+  defp ensure_agent do
+    case Process.whereis(@agent_name) do
+      nil ->
+        Agent.start_link(fn -> %{last_height: -1, blocks: []} end, name: @agent_name)
+
+      _pid ->
+        :ok
+    end
+  end
+
   defp fetch_range(from, to) when from > to, do: []
 
   defp fetch_range(from, to) do
     from..to
-    |> Enum.map(fn height ->
-      case Zcashex.getblock(height, 1) do
-        {:ok, block} when is_map(block) ->
-          %{
-            "height" => block["height"] || height,
-            "size" => block["size"],
-            "hash" => block["hash"],
-            "time" => ZcashExplorerWeb.Helpers.mined_time(block["time"]),
-            "tx_count" => length(block["tx"] || []),
-            "output_total" => 0.0
-          }
+    |> Task.async_stream(
+      fn height ->
+        case Zcashex.getblock(height, 1) do
+          {:ok, block} when is_map(block) ->
+            %{
+              "height" => block["height"] || height,
+              "size" => block["size"],
+              "hash" => block["hash"],
+              "time" => ZcashExplorerWeb.Helpers.mined_time(block["time"]),
+              "tx_count" => length(block["tx"] || []),
+              "output_total" => 0.0
+            }
 
-        other ->
-          Logger.warning("BlockWarmer: getblock #{height} failed: #{inspect(other)}")
-          nil
-      end
+          other ->
+            Logger.warning("BlockWarmer: getblock #{height} failed: #{inspect(other)}")
+            nil
+        end
+      end,
+      max_concurrency: 8,
+      timeout: 15_000,
+      on_timeout: :kill_task
+    )
+    |> Enum.reduce([], fn
+      {:ok, nil}, acc -> acc
+      {:ok, block}, acc -> [block | acc]
+      {:exit, _}, acc -> acc
     end)
-    |> Enum.reject(&is_nil/1)
+    |> Enum.reverse()
   end
 end

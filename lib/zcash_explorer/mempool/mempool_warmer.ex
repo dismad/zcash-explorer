@@ -6,25 +6,23 @@ defmodule ZcashExplorer.Mempool.MempoolWarmer do
 
   @concurrency 4
   @timeout 10_000
-  @enriched_key "raw_mempool_enriched"
+  @agent_name __MODULE__.State
 
   def interval, do: :timer.seconds(5)
 
   def execute(_state) do
     Logger.info("MempoolWarmer: cycle started")
 
+    ensure_agent()
+
     case Zcashex.getrawmempool(true) do
       {:ok, raw_mempool} when is_map(raw_mempool) ->
         current_txids = Map.keys(raw_mempool)
         Logger.info("MempoolWarmer: node reports #{length(current_txids)} txs")
 
-        previous =
-          case Cachex.get(:app_cache, @enriched_key) do
-            {:ok, %{} = map} -> map
-            _ -> %{}
-          end
-
+        previous = Agent.get(@agent_name, & &1)
         previous_txids = Map.keys(previous)
+
         added = current_txids -- previous_txids
         removed = previous_txids -- current_txids
 
@@ -39,7 +37,7 @@ defmodule ZcashExplorer.Mempool.MempoolWarmer do
 
         enriched_map = Map.merge(kept, newly_enriched)
 
-        Cachex.put(:app_cache, @enriched_key, enriched_map)
+        Agent.update(@agent_name, fn _ -> enriched_map end)
 
         list = Map.values(enriched_map)
         Logger.info("MempoolWarmer: writing #{length(list)} txs to cache")
@@ -53,6 +51,16 @@ defmodule ZcashExplorer.Mempool.MempoolWarmer do
       other ->
         Logger.warning("MempoolWarmer: unexpected getrawmempool: #{inspect(other)}")
         :ignore
+    end
+  end
+
+  defp ensure_agent do
+    case Process.whereis(@agent_name) do
+      nil ->
+        Agent.start_link(fn -> %{} end, name: @agent_name)
+
+      _pid ->
+        :ok
     end
   end
 

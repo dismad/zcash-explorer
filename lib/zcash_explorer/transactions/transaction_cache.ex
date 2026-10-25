@@ -5,39 +5,35 @@ defmodule ZcashExplorer.Transactions.TransactionWarmer do
   @rpc_timeout 15_000
   @max_txs 20
   @cache_key "transaction_cache"
-  @state_key "tx_warmer_state"
+  @agent_name __MODULE__.State
 
-  def interval, do: :timer.seconds(15)
+  def interval, do: :timer.seconds(10)
 
   def execute(_state) do
     Logger.info("TransactionWarmer: cycle started")
 
+    ensure_agent()
+
     case safe_call(fn -> Zcashex.getblockcount() end) do
       {:ok, tip} when is_integer(tip) ->
-        previous =
-          case Cachex.get(:app_cache, @state_key) do
-            {:ok, %{last_height: h, txs: txs}} when is_integer(h) and is_list(txs) ->
-              %{last_height: h, txs: txs}
+        %{last_height: last_height, txs: existing} = Agent.get(@agent_name, & &1)
 
-            _ ->
-              %{last_height: -1, txs: []}
-          end
-
-        # Only look at the most recent blocks needed to fill @max_txs
-        from = max(0, tip - 30)
         new_txs =
-          if previous.last_height < tip do
+          if last_height < tip do
+            from = max(0, tip - 30)
+            Logger.info("TransactionWarmer: fetching recent txs from #{from}..#{tip}")
             fetch_recent_txs(from, tip)
           else
-            previous.txs
+            Logger.info("TransactionWarmer: tip unchanged (#{tip})")
+            []
           end
 
         updated =
-          (new_txs ++ previous.txs)
+          (new_txs ++ existing)
           |> Enum.uniq_by(& &1["txid"])
           |> Enum.take(@max_txs)
 
-        Cachex.put(:app_cache, @state_key, %{last_height: tip, txs: updated})
+        Agent.update(@agent_name, fn _ -> %{last_height: tip, txs: updated} end)
 
         Logger.info("TransactionWarmer: writing #{length(updated)} txs (tip #{tip})")
 
@@ -50,6 +46,16 @@ defmodule ZcashExplorer.Transactions.TransactionWarmer do
       other ->
         Logger.warning("TransactionWarmer: unexpected result: #{inspect(other)}")
         :ignore
+    end
+  end
+
+  defp ensure_agent do
+    case Process.whereis(@agent_name) do
+      nil ->
+        Agent.start_link(fn -> %{last_height: -1, txs: []} end, name: @agent_name)
+
+      _pid ->
+        :ok
     end
   end
 
