@@ -6,7 +6,7 @@ defmodule ZcashExplorer.Blocks.BlockWarmer do
   @cache_key "block_cache"
   @state_key "block_warmer_state"
 
-  def interval, do: :timer.seconds(5)
+  def interval, do: :timer.seconds(1)
 
   def execute(_state) do
     Logger.info("BlockWarmer: cycle started")
